@@ -1,0 +1,18 @@
+BasketballRotationiOS/
+├── BasketballRotationiOS.xcodeproj
+├── BasketballRotationiOS/
+│   ├── App/
+│   │   └── BasketballRotationiOSApp.swift
+│   ├── Models/
+│   │   └── Models.swift
+│   ├── Store/
+│   │   └── AppStore.swift
+│   ├── Views/
+│   │   └── ContentView.swift
+│   ├── Assets.xcassets/
+│   │   ├── AccentColor.colorset/
+│   │   ├── AppIcon.appiconset/
+│   │   └── Contents.json
+│   └── Preview Content/
+│       └── Preview Assets.xcassets/
+└── BasketballRotationiOSTests/          (optional)
