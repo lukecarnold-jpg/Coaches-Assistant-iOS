@@ -20,6 +20,42 @@ struct CSVDocument: FileDocument {
     }
 }
 
+struct TextDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.plainText] }
+
+    var text: String
+
+    init(text: String) {
+        self.text = text
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        let data = configuration.file.regularFileContents ?? Data()
+        self.text = String(decoding: data, as: UTF8.self)
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: Data(text.utf8))
+    }
+}
+
+enum TrainingError: LocalizedError {
+    case missingAPIKey
+    case noResponse
+    case parseFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .missingAPIKey:
+            return "Please provide a Gemini API key."
+        case .noResponse:
+            return "No response was returned from Gemini."
+        case .parseFailed:
+            return "Could not parse drills from the AI response."
+        }
+    }
+}
+
 @MainActor
 final class AppStore: ObservableObject {
     @Published private(set) var players: [Player] = []
@@ -59,29 +95,97 @@ final class AppStore: ObservableObject {
 
     func stats(for game: Game, now: Date = Date()) -> [PlayerGameStat] {
         let currentGameTime = currentElapsedTime(for: game, now: now)
+        let onCourt = game.onCourtIDSet
+        let absent = game.absentIDSet
+        let gameEvents = events
+            .filter { $0.gameID == game.id }
+            .sorted { lhs, rhs in
+                if lhs.timestamp == rhs.timestamp {
+                    return lhs.id.uuidString < rhs.id.uuidString
+                }
+                return lhs.timestamp < rhs.timestamp
+            }
 
-        return players.map { player in
-            let key = player.id.uuidString
-            let onCourt = game.onCourtIDSet.contains(player.id)
-            let enteredAt = game.onCourtEnteredAtMillisByPlayerID[key] ?? currentGameTime
-            let shift = onCourt ? max(0, currentGameTime - enteredAt) : 0
+        var totalTimeByPlayer: [UUID: Int64] = [:]
+        var lastEnteredAtByPlayer: [UUID: Int64] = [:]
+        var pointsByPlayer: [UUID: Int] = [:]
+        var foulsByPlayer: [UUID: Int] = [:]
+        var timesSubbedOffByPlayer: [UUID: Int] = [:]
 
-            return PlayerGameStat(
-                player: player,
-                points: game.playerPoints[key] ?? 0,
-                fouls: game.playerFouls[key] ?? 0,
-                mvpVotes: game.playerMvpVotes[key] ?? 0,
-                onCourt: onCourt,
-                currentShiftTimeMillis: shift
-            )
+        for event in gameEvents {
+            switch event.type {
+            case .startLineup:
+                for id in parseUUIDCSV(event.note) {
+                    lastEnteredAtByPlayer[id] = event.gameTimeMillis
+                }
+
+            case .substitution:
+                if let playerInID = event.playerID {
+                    lastEnteredAtByPlayer[playerInID] = event.gameTimeMillis
+                }
+                if let playerOutID = event.relatedPlayerID {
+                    timesSubbedOffByPlayer[playerOutID, default: 0] += 1
+                    if let enteredAt = lastEnteredAtByPlayer.removeValue(forKey: playerOutID) {
+                        totalTimeByPlayer[playerOutID, default: 0] += max(0, event.gameTimeMillis - enteredAt)
+                    }
+                }
+
+            case .score:
+                if let playerID = event.playerID {
+                    pointsByPlayer[playerID, default: 0] += event.amount
+                }
+
+            case .foul:
+                if let playerID = event.playerID {
+                    foulsByPlayer[playerID, default: 0] += event.amount
+                }
+
+            case .periodChange, .gameEnd:
+                for (id, enteredAt) in lastEnteredAtByPlayer {
+                    totalTimeByPlayer[id, default: 0] += max(0, event.gameTimeMillis - enteredAt)
+                }
+                lastEnteredAtByPlayer.removeAll()
+
+            case .opponentScore, .mvpVote:
+                break
+            }
         }
+
+        return players
+            .filter { !absent.contains($0.id) }
+            .map { player in
+                let isOnCourt = onCourt.contains(player.id)
+                let enteredAt = lastEnteredAtByPlayer[player.id] ?? currentGameTime
+                let currentShift = isOnCourt ? max(0, currentGameTime - enteredAt) : 0
+                let totalTime = (totalTimeByPlayer[player.id] ?? 0) + currentShift
+                let playerKey = player.id.uuidString
+
+                return PlayerGameStat(
+                    player: player,
+                    points: max(0, pointsByPlayer[player.id] ?? game.playerPoints[playerKey] ?? 0),
+                    fouls: max(0, foulsByPlayer[player.id] ?? game.playerFouls[playerKey] ?? 0),
+                    mvpVotes: max(0, game.playerMvpVotes[playerKey] ?? 0),
+                    timesSubbedOff: max(0, timesSubbedOffByPlayer[player.id] ?? 0),
+                    onCourt: isOnCourt,
+                    currentShiftTimeMillis: currentShift,
+                    totalTimeMillis: totalTime
+                )
+            }
     }
 
     func currentElapsedTime(for game: Game, now: Date = Date()) -> Int64 {
         let base = game.runningTimeMillis
-        guard let startedAt = game.timerLastStartedAt else { return base }
-        let liveOffset = Int64(now.timeIntervalSince(startedAt) * 1000)
-        return base + max(0, liveOffset)
+        let liveOffset: Int64
+        if let startedAt = game.timerLastStartedAt {
+            liveOffset = Int64(now.timeIntervalSince(startedAt) * 1000)
+        } else {
+            liveOffset = 0
+        }
+        return min(game.periodDurationMillis, max(0, base + max(0, liveOffset)))
+    }
+
+    func periodRemainingTime(for game: Game, now: Date = Date()) -> Int64 {
+        max(0, game.periodDurationMillis - currentElapsedTime(for: game, now: now))
     }
 
     func selectGame(_ id: UUID) {
@@ -96,8 +200,14 @@ final class AppStore: ObservableObject {
             return
         }
 
-        guard let jerseyNumber = Int(jerseyText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            showMessage("Enter a valid jersey number.")
+        let trimmedJersey = jerseyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let jerseyNumber: Int?
+        if trimmedJersey.isEmpty {
+            jerseyNumber = nil
+        } else if let parsed = Int(trimmedJersey) {
+            jerseyNumber = parsed
+        } else {
+            showMessage("Jersey number must be numeric.")
             return
         }
 
@@ -114,8 +224,14 @@ final class AppStore: ObservableObject {
             return
         }
 
-        guard let jerseyNumber = Int(jerseyText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            showMessage("Enter a valid jersey number.")
+        let trimmedJersey = jerseyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let jerseyNumber: Int?
+        if trimmedJersey.isEmpty {
+            jerseyNumber = nil
+        } else if let parsed = Int(trimmedJersey) {
+            jerseyNumber = parsed
+        } else {
+            showMessage("Jersey number must be numeric.")
             return
         }
 
@@ -132,6 +248,7 @@ final class AppStore: ObservableObject {
 
         for index in games.indices {
             games[index].onCourtPlayerIDs.removeAll { $0 == playerID }
+            games[index].absentPlayerIDs.removeAll { $0 == playerID }
             games[index].onCourtEnteredAtMillisByPlayerID.removeValue(forKey: playerID.uuidString)
             games[index].playerPoints.removeValue(forKey: playerID.uuidString)
             games[index].playerFouls.removeValue(forKey: playerID.uuidString)
@@ -142,16 +259,135 @@ final class AppStore: ObservableObject {
         showMessage("Player removed.")
     }
 
-    func createGame(title: String, opponent: String) {
+    func importPlayersCSV(from url: URL) throws {
+        let data = try Data(contentsOf: url)
+        let text = String(decoding: data, as: UTF8.self)
+        importPlayersCSV(text: text)
+    }
+
+    func createGame(title: String, opponent: String, useQuarters: Bool, periodMinutes: Int) {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalTitle = trimmedTitle.isEmpty ? "Game \(games.count + 1)" : trimmedTitle
+        let duration = Int64(max(1, periodMinutes)) * 60 * 1000
 
-        let game = Game(title: finalTitle, opponent: opponent.trimmingCharacters(in: .whitespacesAndNewlines))
+        let game = Game(
+            title: finalTitle,
+            opponent: opponent.trimmingCharacters(in: .whitespacesAndNewlines),
+            useQuarters: useQuarters,
+            periodDurationMillis: duration
+        )
         games.insert(game, at: 0)
         selectedGameID = game.id
         sortGames()
         saveState()
         showMessage("Game created.")
+    }
+
+    func advancePeriod() {
+        mutateSelectedGame { game in
+            guard !game.isFinished, game.currentPeriod < game.maxPeriods else { return }
+            events.append(
+                GameEvent(
+                    gameID: game.id,
+                    type: .periodChange,
+                    note: "Finished Period \(game.currentPeriod)",
+                    gameTimeMillis: currentElapsedTime(for: game)
+                )
+            )
+            game.currentPeriod += 1
+            game.runningTimeMillis = 0
+            game.timerLastStartedAt = nil
+            game.onCourtPlayerIDs = []
+            game.onCourtEnteredAtMillisByPlayerID = [:]
+        } successMessage: {
+            showMessage("Advanced to next period.")
+        }
+    }
+
+    func endGame() {
+        mutateSelectedGame { game in
+            guard !game.isFinished else { return }
+            game.isFinished = true
+            game.timerLastStartedAt = nil
+            game.onCourtPlayerIDs = []
+            game.onCourtEnteredAtMillisByPlayerID = [:]
+            events.append(
+                GameEvent(
+                    gameID: game.id,
+                    type: .gameEnd,
+                    note: "Game Ended",
+                    gameTimeMillis: currentElapsedTime(for: game)
+                )
+            )
+        } successMessage: {
+            showMessage("Game finalized and court reset.")
+        }
+    }
+
+    func updateAbsentPlayers(_ playerIDs: [UUID]) {
+        mutateSelectedGame { game in
+            let unique = uniqueIDs(from: playerIDs)
+            game.absentPlayerIDs = unique
+            let absentSet = Set(unique)
+            game.onCourtPlayerIDs.removeAll { absentSet.contains($0) }
+            for id in absentSet {
+                game.onCourtEnteredAtMillisByPlayerID.removeValue(forKey: id.uuidString)
+            }
+        } successMessage: {
+            showMessage("Attendance updated.")
+        }
+    }
+
+    func updateGameNotes(_ notes: String) {
+        mutateSelectedGame { game in
+            game.notes = notes
+        }
+    }
+
+    func updateEvent(eventID: UUID, amountText: String, note: String) {
+        guard let eventIndex = events.firstIndex(where: { $0.id == eventID }) else { return }
+        let oldEvent = events[eventIndex]
+
+        guard let gameIndex = games.firstIndex(where: { $0.id == oldEvent.gameID }) else { return }
+        var game = games[gameIndex]
+
+        let editableAmountTypes: Set<EventType> = [.score, .opponentScore, .foul, .mvpVote]
+        let parsedAmount: Int
+        if editableAmountTypes.contains(oldEvent.type) {
+            guard let value = Int(amountText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+                showMessage("Amount must be numeric.")
+                return
+            }
+            parsedAmount = value
+        } else {
+            parsedAmount = oldEvent.amount
+        }
+
+        var updatedEvent = oldEvent
+        updatedEvent.amount = parsedAmount
+        updatedEvent.note = note
+
+        rollbackEventEffect(oldEvent, from: &game)
+        applyEventEffect(updatedEvent, to: &game)
+
+        games[gameIndex] = game
+        events[eventIndex] = updatedEvent
+        saveState()
+        showMessage("Event updated.")
+    }
+
+    func deleteEvent(eventID: UUID) {
+        guard let eventIndex = events.firstIndex(where: { $0.id == eventID }) else { return }
+        let event = events[eventIndex]
+
+        guard let gameIndex = games.firstIndex(where: { $0.id == event.gameID }) else { return }
+        var game = games[gameIndex]
+        rollbackEventEffect(event, from: &game)
+
+        games[gameIndex] = game
+        events.remove(at: eventIndex)
+        saveState()
+        showMessage("Event removed.")
     }
 
     func deleteGame(_ gameID: UUID) {
@@ -163,26 +399,26 @@ final class AppStore: ObservableObject {
     }
 
     func setStartingLineup(_ playerIDs: [UUID]) {
-        var uniqueIDs: [UUID] = []
-        for id in playerIDs where !uniqueIDs.contains(id) {
-            uniqueIDs.append(id)
-        }
-
+        let uniqueIDs = uniqueIDs(from: playerIDs)
         guard uniqueIDs.count == 5 else {
             showMessage("Select exactly 5 players.")
             return
         }
 
         mutateSelectedGame { game in
+            guard !game.isFinished else { return }
+            let eligible = uniqueIDs.filter { !game.absentIDSet.contains($0) }
+            guard eligible.count == 5 else { return }
+
             let currentGameTime = currentElapsedTime(for: game)
-            game.onCourtPlayerIDs = uniqueIDs
-            game.onCourtEnteredAtMillisByPlayerID = Dictionary(uniqueKeysWithValues: uniqueIDs.map { ($0.uuidString, currentGameTime) })
+            game.onCourtPlayerIDs = eligible
+            game.onCourtEnteredAtMillisByPlayerID = Dictionary(uniqueKeysWithValues: eligible.map { ($0.uuidString, currentGameTime) })
 
             events.append(
                 GameEvent(
                     gameID: game.id,
                     type: .startLineup,
-                    note: uniqueIDs.map(\.uuidString).joined(separator: ","),
+                    note: eligible.map(\.uuidString).joined(separator: ","),
                     gameTimeMillis: currentGameTime
                 )
             )
@@ -203,7 +439,9 @@ final class AppStore: ObservableObject {
         }
 
         mutateSelectedGame { game in
-            guard game.onCourtPlayerIDs.contains(playerOutID),
+            guard !game.isFinished else { return }
+            guard !game.absentIDSet.contains(playerInID),
+                  game.onCourtPlayerIDs.contains(playerOutID),
                   !game.onCourtPlayerIDs.contains(playerInID) else {
                 return
             }
@@ -230,39 +468,38 @@ final class AppStore: ObservableObject {
     func addScore(playerID: UUID?, points: Int) {
         guard points != 0 else { return }
 
-        if let playerID {
-            mutateSelectedGame { game in
+        mutateSelectedGame { game in
+            guard !game.isFinished else { return }
+            let currentGameTime = currentElapsedTime(for: game)
+
+            if let playerID {
                 let playerKey = playerID.uuidString
                 let currentPlayerPoints = game.playerPoints[playerKey] ?? 0
                 let actualDelta = boundedDelta(requested: points, floors: [currentPlayerPoints, game.teamScore])
                 guard actualDelta != 0 else { return }
 
                 game.playerPoints[playerKey] = currentPlayerPoints + actualDelta
-                game.teamScore += actualDelta
-
+                game.teamScore = max(0, game.teamScore + actualDelta)
                 events.append(
                     GameEvent(
                         gameID: game.id,
                         type: .score,
                         playerID: playerID,
                         amount: actualDelta,
-                        gameTimeMillis: currentElapsedTime(for: game)
+                        gameTimeMillis: currentGameTime
                     )
                 )
-            }
-        } else {
-            mutateSelectedGame { game in
+            } else {
                 let actualDelta = boundedDelta(requested: points, floors: [game.opponentScore])
                 guard actualDelta != 0 else { return }
 
-                game.opponentScore += actualDelta
+                game.opponentScore = max(0, game.opponentScore + actualDelta)
                 events.append(
                     GameEvent(
                         gameID: game.id,
-                        type: .score,
+                        type: .opponentScore,
                         amount: actualDelta,
-                        note: "OPPONENT",
-                        gameTimeMillis: currentElapsedTime(for: game)
+                        gameTimeMillis: currentGameTime
                     )
                 )
             }
@@ -276,7 +513,7 @@ final class AppStore: ObservableObject {
             let actualDelta = boundedDelta(requested: delta, floors: [game.teamScore])
             guard actualDelta != 0 else { return }
 
-            game.teamScore += actualDelta
+            game.teamScore = max(0, game.teamScore + actualDelta)
             events.append(
                 GameEvent(
                     gameID: game.id,
@@ -293,6 +530,7 @@ final class AppStore: ObservableObject {
         guard delta != 0 else { return }
 
         mutateSelectedGame { game in
+            guard !game.isFinished else { return }
             let key = playerID.uuidString
             let currentValue = game.playerFouls[key] ?? 0
             let actualDelta = boundedDelta(requested: delta, floors: [currentValue])
@@ -313,6 +551,7 @@ final class AppStore: ObservableObject {
 
     func addMvpVote(playerID: UUID) {
         mutateSelectedGame { game in
+            guard !game.isFinished else { return }
             let key = playerID.uuidString
             game.playerMvpVotes[key] = (game.playerMvpVotes[key] ?? 0) + 1
             events.append(
@@ -329,12 +568,20 @@ final class AppStore: ObservableObject {
 
     func toggleTimer() {
         mutateSelectedGame { game in
+            guard !game.isFinished else { return }
+
             if let startedAt = game.timerLastStartedAt {
-                game.runningTimeMillis += Int64(Date().timeIntervalSince(startedAt) * 1000)
+                game.runningTimeMillis = currentElapsedTime(for: game, now: Date())
                 game.timerLastStartedAt = nil
-            } else {
-                game.timerLastStartedAt = Date()
+                return
             }
+
+            if currentElapsedTime(for: game) >= game.periodDurationMillis {
+                showMessage("Period has ended. Advance period or reset clock.")
+                return
+            }
+
+            game.timerLastStartedAt = Date()
         }
     }
 
@@ -343,13 +590,14 @@ final class AppStore: ObservableObject {
             game.runningTimeMillis = 0
             game.timerLastStartedAt = nil
             game.onCourtEnteredAtMillisByPlayerID = Dictionary(uniqueKeysWithValues: game.onCourtPlayerIDs.map { ($0.uuidString, Int64(0)) })
+        } successMessage: {
+            showMessage("Timer reset to 0:00.")
         }
     }
 
-    func setGameTime(_ millis: Int64) {
-        let target = max(0, millis)
-
+    func setGameTime(_ elapsedMillis: Int64) {
         mutateSelectedGame { game in
+            let target = min(game.periodDurationMillis, max(0, elapsedMillis))
             let current = currentElapsedTime(for: game)
             let delta = target - current
 
@@ -380,7 +628,7 @@ final class AppStore: ObservableObject {
             [
                 csv($0.id.uuidString),
                 csv($0.name),
-                csv(String($0.jerseyNumber))
+                csv($0.jerseyNumber.map(String.init) ?? "")
             ].joined(separator: ",")
         })
         return lines.joined(separator: "\n")
@@ -389,6 +637,11 @@ final class AppStore: ObservableObject {
     func selectedGameCSV() -> String {
         guard let game = selectedGame else { return "" }
         return gameCSV(for: game)
+    }
+
+    func selectedGameNotesTXT() -> String {
+        guard let game = selectedGame else { return "" }
+        return gameNotesTXT(for: game)
     }
 
     func gameCSV(for game: Game) -> String {
@@ -403,7 +656,7 @@ final class AppStore: ObservableObject {
             }
 
         var lines = [
-            "gameId,gameTitle,opponent,createdAt,teamScoreAtExport,opponentScoreAtExport,eventId,eventTimestamp,gameClock,eventType,playerName,playerNumber,relatedPlayerName,relatedPlayerNumber,amount,note"
+            "gameId,gameTitle,opponent,createdAt,teamScoreAtExport,gameNotes,eventId,eventTimestamp,eventGameTime,eventType,playerName,playerNumber,relatedPlayerName,relatedPlayerNumber,points,note"
         ]
 
         if gameEvents.isEmpty {
@@ -413,7 +666,7 @@ final class AppStore: ObservableObject {
                 csv(game.opponent),
                 csv(Self.timestampFormatter.string(from: game.createdAt)),
                 csv(String(game.teamScore)),
-                csv(String(game.opponentScore)),
+                csv(game.notes),
                 "",
                 "",
                 "",
@@ -436,21 +689,34 @@ final class AppStore: ObservableObject {
                     csv(game.opponent),
                     csv(Self.timestampFormatter.string(from: game.createdAt)),
                     csv(String(game.teamScore)),
-                    csv(String(game.opponentScore)),
+                    csv(game.notes),
                     csv(event.id.uuidString),
                     csv(Self.timestampFormatter.string(from: event.timestamp)),
                     csv(formatDuration(event.gameTimeMillis)),
                     csv(event.type.rawValue),
                     csv(player?.name ?? ""),
-                    csv(player.map { String($0.jerseyNumber) } ?? ""),
+                    csv(player?.jerseyNumber.map(String.init) ?? ""),
                     csv(relatedPlayer?.name ?? ""),
-                    csv(relatedPlayer.map { String($0.jerseyNumber) } ?? ""),
+                    csv(relatedPlayer?.jerseyNumber.map(String.init) ?? ""),
                     csv(String(event.amount)),
                     csv(exportNote(for: event, playersByID: playersByID))
                 ].joined(separator: ","))
             }
         }
 
+        return lines.joined(separator: "\n")
+    }
+
+    func gameNotesTXT(for game: Game) -> String {
+        var lines: [String] = []
+        lines.append("Game: \(game.title)")
+        lines.append("Opponent: \(game.opponent)")
+        lines.append("Date: \(Self.timestampFormatter.string(from: game.createdAt))")
+        lines.append("Score: Us \(game.teamScore) - \(game.opponentScore) \(game.opponent)")
+        lines.append("")
+        lines.append("--- COACHING NOTES ---")
+        lines.append("")
+        lines.append(game.notes)
         return lines.joined(separator: "\n")
     }
 
@@ -467,9 +733,7 @@ final class AppStore: ObservableObject {
     func eventDescription(_ event: GameEvent, playersByID: [UUID: Player]) -> String {
         switch event.type {
         case .startLineup:
-            let lineup = event.note
-                .split(separator: ",")
-                .compactMap { UUID(uuidString: String($0)) }
+            let lineup = parseUUIDCSV(event.note)
                 .compactMap { playersByID[$0]?.displayLabel }
                 .joined(separator: " | ")
             return "Starting lineup: \(lineup)"
@@ -480,13 +744,13 @@ final class AppStore: ObservableObject {
             return "\(playerIn) in for \(playerOut)"
 
         case .score:
-            if event.note == "OPPONENT" {
-                return "Opponent \(signed(event.amount))"
-            }
             if event.note == "TEAM_ADJUSTMENT" {
                 return "Team score \(signed(event.amount))"
             }
             return "\(playerLabel(for: event.playerID, playersByID: playersByID)) \(signed(event.amount))"
+
+        case .opponentScore:
+            return "Opponent \(signed(event.amount))"
 
         case .foul:
             if event.amount >= 0 {
@@ -496,7 +760,40 @@ final class AppStore: ObservableObject {
 
         case .mvpVote:
             return "\(playerLabel(for: event.playerID, playersByID: playersByID)) MVP vote"
+
+        case .periodChange:
+            return event.note.isEmpty ? "Period changed" : event.note
+
+        case .gameEnd:
+            return "Game ended"
         }
+    }
+
+    func generateDrills(ageGroup: String, apiKey: String) async throws -> [BasketballDrill] {
+        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedKey.isEmpty else { throw TrainingError.missingAPIKey }
+
+        let prompt = """
+        Generate exactly 3 age-appropriate basketball drills for \(ageGroup) players.
+        Format each drill with a 'TITLE:', 'DESCRIPTION:', and 'TEACHING POINTS:' on separate lines.
+        Keep descriptions concise and practical.
+        """
+
+        var request = URLRequest(url: URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(trimmedKey)")!)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(
+            GeminiRequest(contents: [GeminiContent(parts: [GeminiPart(text: prompt)])])
+        )
+
+        let (data, _) = try await URLSession.shared.data(for: request)
+        let response = try JSONDecoder().decode(GeminiResponse.self, from: data)
+        let text = response.candidates.first?.content.parts.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !text.isEmpty else { throw TrainingError.noResponse }
+
+        let drills = parseDrills(from: text)
+        guard !drills.isEmpty else { throw TrainingError.parseFailed }
+        return Array(drills.prefix(3))
     }
 
     static let timestampFormatter: DateFormatter = {
@@ -513,15 +810,9 @@ final class AppStore: ObservableObject {
     private func exportNote(for event: GameEvent, playersByID: [UUID: Player]) -> String {
         switch event.type {
         case .startLineup:
-            return event.note
-                .split(separator: ",")
-                .compactMap { UUID(uuidString: String($0)) }
+            return parseUUIDCSV(event.note)
                 .compactMap { playersByID[$0]?.displayLabel }
                 .joined(separator: " | ")
-        case .score where event.note == "OPPONENT":
-            return "Opponent score"
-        case .score where event.note == "TEAM_ADJUSTMENT":
-            return "Team score adjustment"
         default:
             return event.note
         }
@@ -561,10 +852,19 @@ final class AppStore: ObservableObject {
 
     private func sortPlayers() {
         players.sort { lhs, rhs in
-            if lhs.jerseyNumber == rhs.jerseyNumber {
+            switch (lhs.jerseyNumber, rhs.jerseyNumber) {
+            case let (.some(left), .some(right)):
+                if left == right {
+                    return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                }
+                return left < right
+            case (.some, .none):
+                return true
+            case (.none, .some):
+                return false
+            case (.none, .none):
                 return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
             }
-            return lhs.jerseyNumber < rhs.jerseyNumber
         }
     }
 
@@ -591,9 +891,12 @@ final class AppStore: ObservableObject {
             return
         }
 
+        let oldGame = games[index]
         mutate(&games[index])
-        saveState()
-        successMessage?()
+        if games[index] != oldGame {
+            saveState()
+            successMessage?()
+        }
     }
 
     private func boundedDelta(requested: Int, floors: [Int]) -> Int {
@@ -606,6 +909,175 @@ final class AppStore: ObservableObject {
         let escaped = value.replacingOccurrences(of: "\"", with: "\"\"")
         return "\"\(escaped)\""
     }
+
+    private func parseUUIDCSV(_ text: String) -> [UUID] {
+        text.split(separator: ",")
+            .compactMap { UUID(uuidString: String($0).trimmingCharacters(in: .whitespacesAndNewlines)) }
+    }
+
+    private func uniqueIDs(from ids: [UUID]) -> [UUID] {
+        var seen = Set<UUID>()
+        var result: [UUID] = []
+        for id in ids where !seen.contains(id) {
+            seen.insert(id)
+            result.append(id)
+        }
+        return result
+    }
+
+    private func parseCSVLine(_ line: String) -> [String] {
+        var result: [String] = []
+        var current = ""
+        var inQuotes = false
+        var index = line.startIndex
+
+        while index < line.endIndex {
+            let char = line[index]
+            if char == "\"" {
+                let next = line.index(after: index)
+                if inQuotes && next < line.endIndex && line[next] == "\"" {
+                    current.append("\"")
+                    index = next
+                } else {
+                    inQuotes.toggle()
+                }
+            } else if char == "," && !inQuotes {
+                result.append(current)
+                current = ""
+            } else {
+                current.append(char)
+            }
+            index = line.index(after: index)
+        }
+
+        result.append(current)
+        return result
+    }
+
+    private func importPlayersCSV(text: String) {
+        let lines = text.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        guard !lines.isEmpty else { return }
+
+        let startIndex = lines.first?.localizedCaseInsensitiveContains("name") == true ? 1 : 0
+        var importedCount = 0
+
+        for line in lines.dropFirst(startIndex) {
+            let fields = parseCSVLine(line)
+            if fields.count >= 3 {
+                let name = fields[1].trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+                let jersey = Int(fields[2].trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "\"")))
+                if !name.isEmpty {
+                    players.append(Player(name: name, jerseyNumber: jersey))
+                    importedCount += 1
+                }
+            } else if fields.count == 2 {
+                let first = fields[0].trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+                let second = fields[1].trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+                let looksLikeID = Int(first) != nil
+                let name = looksLikeID ? second : first
+                let jersey = looksLikeID ? nil : Int(second)
+                if !name.isEmpty {
+                    players.append(Player(name: name, jerseyNumber: jersey))
+                    importedCount += 1
+                }
+            } else if fields.count == 1 {
+                let name = fields[0].trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+                if !name.isEmpty {
+                    players.append(Player(name: name, jerseyNumber: nil))
+                    importedCount += 1
+                }
+            }
+        }
+
+        sortPlayers()
+        saveState()
+        showMessage("Imported \(importedCount) players.")
+    }
+
+    private func applyEventEffect(_ event: GameEvent, to game: inout Game) {
+        switch event.type {
+        case .score:
+            if let playerID = event.playerID {
+                let key = playerID.uuidString
+                game.playerPoints[key] = max(0, (game.playerPoints[key] ?? 0) + event.amount)
+                game.teamScore = max(0, game.teamScore + event.amount)
+            } else {
+                game.teamScore = max(0, game.teamScore + event.amount)
+            }
+        case .opponentScore:
+            game.opponentScore = max(0, game.opponentScore + event.amount)
+        case .foul:
+            if let playerID = event.playerID {
+                let key = playerID.uuidString
+                game.playerFouls[key] = max(0, (game.playerFouls[key] ?? 0) + event.amount)
+            }
+        case .mvpVote:
+            if let playerID = event.playerID {
+                let key = playerID.uuidString
+                game.playerMvpVotes[key] = max(0, (game.playerMvpVotes[key] ?? 0) + event.amount)
+            }
+        case .startLineup, .substitution, .periodChange, .gameEnd:
+            break
+        }
+    }
+
+    private func rollbackEventEffect(_ event: GameEvent, from game: inout Game) {
+        var inverse = event
+        inverse.amount = -event.amount
+        applyEventEffect(inverse, to: &game)
+    }
+
+    private func parseDrills(from text: String) -> [BasketballDrill] {
+        let blocks = text.components(separatedBy: "TITLE:")
+        var drills: [BasketballDrill] = []
+
+        for rawBlock in blocks {
+            let block = rawBlock.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !block.isEmpty else { continue }
+
+            guard let descriptionRange = block.range(of: "DESCRIPTION:", options: .caseInsensitive),
+                  let teachingRange = block.range(of: "TEACHING POINTS:", options: .caseInsensitive) else {
+                continue
+            }
+
+            let title = block[..<descriptionRange.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
+            let description = block[descriptionRange.upperBound..<teachingRange.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
+            let teaching = block[teachingRange.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+
+            guard !title.isEmpty, !description.isEmpty else { continue }
+            drills.append(BasketballDrill(title: title, description: description, teachingPoints: teaching))
+        }
+
+        return drills
+    }
+}
+
+private struct GeminiRequest: Encodable {
+    let contents: [GeminiContent]
+}
+
+private struct GeminiContent: Encodable {
+    let parts: [GeminiPart]
+}
+
+private struct GeminiPart: Encodable {
+    let text: String
+}
+
+private struct GeminiResponse: Decodable {
+    let candidates: [GeminiCandidate]
+}
+
+private struct GeminiCandidate: Decodable {
+    let content: GeminiContentResponse
+}
+
+private struct GeminiContentResponse: Decodable {
+    let parts: [GeminiPartResponse]
+}
+
+private struct GeminiPartResponse: Decodable {
+    let text: String?
 }
 
 func formatTime(_ date: Date) -> String {

@@ -5,7 +5,15 @@ import Combine
 enum AppTab: Hashable {
     case roster
     case game
+    case training
     case settings
+}
+
+enum TrainingUiState {
+    case idle
+    case loading
+    case success([BasketballDrill])
+    case error(String)
 }
 
 struct ContentView: View {
@@ -27,6 +35,12 @@ struct ContentView: View {
                     Label("Game", systemImage: "basketball.fill")
                 }
                 .tag(AppTab.game)
+
+            TrainingScreen()
+                .tabItem {
+                    Label("Training", systemImage: "dumbbell.fill")
+                }
+                .tag(AppTab.training)
 
             SettingsScreen()
                 .tabItem {
@@ -71,7 +85,7 @@ struct SettingsScreen: View {
                 }
 
                 SectionCard(title: "Exports") {
-                    Text("Use the iOS export sheet to save CSV files to Files, iCloud Drive, or another location you choose.")
+                    Text("Use the iOS export sheet to save CSV/TXT files to Files, iCloud Drive, or another location.")
                         .font(.body)
                 }
             }
@@ -96,6 +110,7 @@ struct RosterScreen: View {
     @State private var editingPlayer: Player?
     @State private var showExport = false
     @State private var exportText = ""
+    @State private var showImport = false
 
     var body: some View {
         ScrollView {
@@ -107,18 +122,17 @@ struct RosterScreen: View {
                         .textFieldStyle(.roundedBorder)
                         .textInputAutocapitalization(.words)
 
-                    TextField("Jersey number", text: $jerseyNumber)
+                    TextField("Jersey number (optional)", text: $jerseyNumber)
                         .textFieldStyle(.roundedBorder)
                         .keyboardType(.numberPad)
 
                     if showError {
-                        ErrorBanner(text: "Both name and jersey number are required.")
+                        ErrorBanner(text: "Player name is required.")
                     }
 
                     HStack(spacing: 12) {
                         Button("Add player") {
-                            if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                                jerseyNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                 showError = true
                             } else {
                                 store.addPlayer(name: name, jerseyText: jerseyNumber)
@@ -135,6 +149,11 @@ struct RosterScreen: View {
                         }
                         .buttonStyle(.bordered)
                     }
+
+                    Button("Import roster CSV") {
+                        showImport = true
+                    }
+                    .buttonStyle(.bordered)
                 }
 
                 SectionCard(title: "Players") {
@@ -191,6 +210,27 @@ struct RosterScreen: View {
                 store.showMessage(error.localizedDescription)
             }
         }
+        .fileImporter(
+            isPresented: $showImport,
+            allowedContentTypes: [.commaSeparatedText, .plainText]
+        ) { result in
+            switch result {
+            case .success(let url):
+                do {
+                    let hasAccess = url.startAccessingSecurityScopedResource()
+                    defer {
+                        if hasAccess {
+                            url.stopAccessingSecurityScopedResource()
+                        }
+                    }
+                    try store.importPlayersCSV(from: url)
+                } catch {
+                    store.showMessage(error.localizedDescription)
+                }
+            case .failure(let error):
+                store.showMessage(error.localizedDescription)
+            }
+        }
     }
 }
 
@@ -206,7 +246,7 @@ struct EditPlayerSheet: View {
     init(player: Player) {
         self.player = player
         _name = State(initialValue: player.name)
-        _jerseyNumber = State(initialValue: String(player.jerseyNumber))
+        _jerseyNumber = State(initialValue: player.jerseyNumber.map(String.init) ?? "")
     }
 
     var body: some View {
@@ -215,7 +255,7 @@ struct EditPlayerSheet: View {
                 TextField("Player name", text: $name)
                     .textInputAutocapitalization(.words)
 
-                TextField("Jersey number", text: $jerseyNumber)
+                TextField("Jersey number (optional)", text: $jerseyNumber)
                     .keyboardType(.numberPad)
             }
             .navigationTitle("Edit player")
@@ -244,13 +284,20 @@ struct GameScreen: View {
 
     @State private var gameTitle = ""
     @State private var opponent = ""
+    @State private var useQuarters = false
+    @State private var periodMinutes = 10
+    @State private var absentSelection: Set<UUID> = []
     @State private var startingLineupSelection: Set<UUID> = []
     @State private var playerOutID: UUID?
     @State private var playerInID: UUID?
+    @State private var notesDraft = ""
     @State private var showGameExport = false
     @State private var gameExportText = ""
     @State private var showRosterExport = false
     @State private var rosterExportText = ""
+    @State private var showNotesExport = false
+    @State private var notesExportText = ""
+    @State private var editingEvent: GameEvent?
 
     var body: some View {
         let selectedGame = store.selectedGame
@@ -258,6 +305,8 @@ struct GameScreen: View {
         let onCourtStats = stats.filter { $0.onCourt }
         let benchStats = stats.filter { !$0.onCourt }
         let playersByID = Dictionary(uniqueKeysWithValues: store.players.map { ($0.id, $0) })
+        let absentPlayers = Set(selectedGame?.absentPlayerIDs ?? [])
+        let availablePlayers = store.players.filter { !absentPlayers.contains($0.id) }
 
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -271,10 +320,28 @@ struct GameScreen: View {
                         .textFieldStyle(.roundedBorder)
                         .textInputAutocapitalization(.words)
 
+                    Toggle(isOn: $useQuarters) {
+                        Text(useQuarters ? "Quarter game (4 periods)" : "Half game (2 periods)")
+                    }
+
+                    HStack {
+                        Text("Period minutes: \(periodMinutes)")
+                        Spacer()
+                        Stepper("", value: $periodMinutes, in: 1...30)
+                            .labelsHidden()
+                    }
+
                     Button("Create game") {
-                        store.createGame(title: gameTitle, opponent: opponent)
+                        store.createGame(
+                            title: gameTitle,
+                            opponent: opponent,
+                            useQuarters: useQuarters,
+                            periodMinutes: periodMinutes
+                        )
                         gameTitle = ""
                         opponent = ""
+                        useQuarters = false
+                        periodMinutes = 10
                     }
                     .buttonStyle(.borderedProminent)
                 }
@@ -296,8 +363,15 @@ struct GameScreen: View {
                                             .font(.subheadline)
                                     }
 
+                                    Text("Period: \(game.currentPeriod)/\(game.maxPeriods)")
+                                        .font(.subheadline)
+
                                     Text("Score: \(game.teamScore) - \(game.opponentScore)")
                                         .font(.subheadline)
+
+                                    if game.isFinished {
+                                        StatusBadge(text: "FINISHED")
+                                    }
 
                                     HStack {
                                         Button(selected ? "Selected" : "Select") {
@@ -328,6 +402,50 @@ struct GameScreen: View {
                 }
 
                 if let game = selectedGame {
+                    SectionCard(title: "Period controls") {
+                        Text("\(game.useQuarters ? "Quarter" : "Half") \(game.currentPeriod) of \(game.maxPeriods)")
+                            .font(.headline)
+
+                        HStack(spacing: 12) {
+                            Button("Advance period") {
+                                store.advancePeriod()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(game.isFinished || game.currentPeriod >= game.maxPeriods)
+
+                            Button("End game", role: .destructive) {
+                                store.endGame()
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(game.isFinished)
+                        }
+                    }
+
+                    SectionCard(title: "Attendance") {
+                        Text("Mark absent players for this game.")
+
+                        LazyVStack(spacing: 8) {
+                            ForEach(store.players) { player in
+                                CheckmarkRow(
+                                    text: player.displayLabel,
+                                    selected: absentSelection.contains(player.id)
+                                ) {
+                                    if absentSelection.contains(player.id) {
+                                        absentSelection.remove(player.id)
+                                    } else {
+                                        absentSelection.insert(player.id)
+                                    }
+                                }
+                            }
+                        }
+
+                        Button("Save attendance") {
+                            store.updateAbsentPlayers(Array(absentSelection))
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(game.isFinished)
+                    }
+
                     SectionCard(title: "Game clock & score") {
                         GameClockView(game: game, now: now)
 
@@ -364,19 +482,45 @@ struct GameScreen: View {
                                 showRosterExport = true
                             }
                             .buttonStyle(.bordered)
+
+                            Button("Export notes TXT") {
+                                notesExportText = store.selectedGameNotesTXT()
+                                showNotesExport = true
+                            }
+                            .buttonStyle(.bordered)
                         }
                     }
 
-                    if store.players.count < 5 {
+                    SectionCard(title: "Coaching notes") {
+                        TextEditor(text: $notesDraft)
+                            .frame(minHeight: 120)
+                            .padding(8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color(uiColor: .systemBackground))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color(uiColor: .separator), lineWidth: 1)
+                            )
+
+                        Button("Save notes") {
+                            store.updateGameNotes(notesDraft)
+                            store.showMessage("Notes updated.")
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+
+                    if availablePlayers.count < 5 {
                         SectionCard(title: "Lineup") {
-                            EmptyMessage(text: "You need at least 5 players before you can set the lineup.")
+                            EmptyMessage(text: "You need at least 5 available players (not absent) before you can set the lineup.")
                         }
                     } else if game.onCourtPlayerIDs.count < 5 {
                         SectionCard(title: "Set starting lineup") {
-                            Text("Select exactly 5 players.")
+                            Text("Select exactly 5 available players.")
 
                             LazyVStack(spacing: 8) {
-                                ForEach(store.players) { player in
+                                ForEach(availablePlayers) { player in
                                     CheckmarkRow(
                                         text: player.displayLabel,
                                         selected: startingLineupSelection.contains(player.id)
@@ -394,7 +538,7 @@ struct GameScreen: View {
                                 store.setStartingLineup(Array(startingLineupSelection))
                             }
                             .buttonStyle(.borderedProminent)
-                            .disabled(startingLineupSelection.count != 5)
+                            .disabled(startingLineupSelection.count != 5 || game.isFinished)
                         }
                     } else {
                         SectionCard(title: "Players on court") {
@@ -448,7 +592,7 @@ struct GameScreen: View {
                                 playerOutID = nil
                             }
                             .buttonStyle(.borderedProminent)
-                            .disabled(playerInID == nil || playerOutID == nil)
+                            .disabled(playerInID == nil || playerOutID == nil || game.isFinished)
                         }
                     }
 
@@ -465,6 +609,9 @@ struct GameScreen: View {
 
                                             Text("Points: \(stat.points)   Fouls: \(stat.fouls)   Votes: \(stat.mvpVotes)")
                                                 .font(.subheadline)
+                                            Text("Subbed off: \(stat.timesSubbedOff)   Total time: \(formatDuration(stat.totalTimeMillis))")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
                                         }
 
                                         Spacer()
@@ -498,13 +645,27 @@ struct GameScreen: View {
                         } else {
                             LazyVStack(spacing: 10) {
                                 ForEach(store.selectedGameEvents) { event in
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(store.eventDescription(event, playersByID: playersByID))
-                                            .font(.body.weight(.medium))
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(store.eventDescription(event, playersByID: playersByID))
+                                                .font(.body.weight(.medium))
 
-                                        Text(formatTime(event.timestamp))
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
+                                            Text("\(formatTime(event.timestamp)) • \(formatDuration(event.gameTimeMillis))")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+
+                                        HStack(spacing: 12) {
+                                            Button("Edit") {
+                                                editingEvent = event
+                                            }
+                                            .buttonStyle(.bordered)
+
+                                            Button("Delete", role: .destructive) {
+                                                store.deleteEvent(eventID: event.id)
+                                            }
+                                            .buttonStyle(.bordered)
+                                        }
                                     }
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(12)
@@ -528,10 +689,28 @@ struct GameScreen: View {
             }
             .padding(16)
         }
+        .onAppear {
+            if let game = store.selectedGame {
+                absentSelection = Set(game.absentPlayerIDs)
+                notesDraft = game.notes
+            }
+        }
         .onChange(of: store.selectedGameID) { _ in
             startingLineupSelection.removeAll()
             playerInID = nil
             playerOutID = nil
+            if let game = store.selectedGame {
+                absentSelection = Set(game.absentPlayerIDs)
+                notesDraft = game.notes
+            } else {
+                absentSelection.removeAll()
+                notesDraft = ""
+            }
+        }
+        .sheet(item: $editingEvent) { event in
+            EventEditorSheet(event: event) { amountText, note in
+                store.updateEvent(eventID: event.id, amountText: amountText, note: note)
+            }
         }
         .fileExporter(
             isPresented: $showGameExport,
@@ -559,6 +738,176 @@ struct GameScreen: View {
                 store.showMessage(error.localizedDescription)
             }
         }
+        .fileExporter(
+            isPresented: $showNotesExport,
+            document: TextDocument(text: notesExportText),
+            contentType: .plainText,
+            defaultFilename: "coaching-notes"
+        ) { result in
+            switch result {
+            case .success:
+                store.showMessage("Coaching notes exported.")
+            case .failure(let error):
+                store.showMessage(error.localizedDescription)
+            }
+        }
+    }
+}
+
+struct EventEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let event: GameEvent
+    let onSave: (String, String) -> Void
+
+    @State private var amountText: String
+    @State private var noteText: String
+
+    init(event: GameEvent, onSave: @escaping (String, String) -> Void) {
+        self.event = event
+        self.onSave = onSave
+        _amountText = State(initialValue: String(event.amount))
+        _noteText = State(initialValue: event.note)
+    }
+
+    private var isAmountEditable: Bool {
+        [.score, .opponentScore, .foul, .mvpVote].contains(event.type)
+    }
+
+    var body: some View {
+        NavigationView {
+            Form {
+                if isAmountEditable {
+                    TextField("Amount", text: $amountText)
+                        .keyboardType(.numbersAndPunctuation)
+                }
+                TextField("Note", text: $noteText)
+            }
+            .navigationTitle("Edit event")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        onSave(amountText, noteText)
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct TrainingScreen: View {
+    @EnvironmentObject private var store: AppStore
+    @State private var ageGroup = "Under 10's"
+    @State private var apiKey = ""
+    @State private var uiState: TrainingUiState = .idle
+
+    private let ageGroups = [
+        "Mini Ball (Ages 5-6)",
+        "Under 8's",
+        "Under 10's",
+        "Under 12's",
+        "Under 14's",
+        "Under 16's",
+        "Under 18's"
+    ]
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    ScreenTitle("Training drills")
+                    Spacer()
+                    Text("COMING SOON")
+                        .font(.caption.weight(.bold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.accentColor.opacity(0.15))
+                        )
+                }
+
+                SectionCard(title: "Generate AI drills") {
+                    Picker("Age group", selection: $ageGroup) {
+                        ForEach(ageGroups, id: \.self) { group in
+                            Text(group).tag(group)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    SecureField("Gemini API key", text: $apiKey)
+                        .textFieldStyle(.roundedBorder)
+
+                    Button("Generate drills") {
+                        Task {
+                            uiState = .loading
+                            do {
+                                let drills = try await store.generateDrills(ageGroup: ageGroup, apiKey: apiKey)
+                                uiState = .success(drills)
+                            } catch {
+                                uiState = .error(error.localizedDescription)
+                            }
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+
+                SectionCard(title: "Training modules") {
+                    Text("Interactive training modules, video demonstrations, and progress tracking are being expanded in upcoming releases.")
+                        .font(.body)
+                }
+
+                SectionCard(title: "Results") {
+                    switch uiState {
+                    case .idle:
+                        EmptyMessage(text: "Select an age group, add your API key, and generate drills.")
+                    case .loading:
+                        HStack {
+                            ProgressView()
+                            Text("Generating drills...")
+                        }
+                    case .error(let message):
+                        ErrorBanner(text: message)
+                    case .success(let drills):
+                        LazyVStack(spacing: 10) {
+                            ForEach(drills) { drill in
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text(drill.title)
+                                        .font(.headline)
+                                    Text("Description")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text(drill.description)
+                                        .font(.body)
+                                    Divider()
+                                    Text("Teaching points")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text(drill.teachingPoints)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .fill(Color(uiColor: .systemBackground))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(Color(uiColor: .separator), lineWidth: 1)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(16)
+        }
     }
 }
 
@@ -575,17 +924,31 @@ struct GameClockView: View {
         store.currentElapsedTime(for: game, now: now)
     }
 
+    var remaining: Int64 {
+        store.periodRemainingTime(for: game, now: now)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center) {
-                Text(formatDuration(elapsed))
-                    .font(.system(size: 38, weight: .bold, design: .monospaced))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Remaining")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(formatDuration(remaining))
+                        .font(.system(size: 38, weight: .bold, design: .monospaced))
+                    Text("Elapsed: \(formatDuration(elapsed))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
                 Spacer()
 
                 Button {
-                    minutesText = String(elapsed / 60_000)
-                    secondsText = String((elapsed % 60_000) / 1_000)
+                    let remainingMinutes = remaining / 60_000
+                    let remainingSeconds = (remaining % 60_000) / 1_000
+                    minutesText = String(remainingMinutes)
+                    secondsText = String(remainingSeconds)
                     editing.toggle()
                 } label: {
                     Image(systemName: "slider.horizontal.3")
@@ -604,6 +967,7 @@ struct GameClockView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(game.timerLastStartedAt == nil ? .accentColor : .red)
+                .disabled(game.isFinished)
             }
 
             if editing {
@@ -619,7 +983,9 @@ struct GameClockView: View {
                     Button("Set") {
                         let minutes = Int64(minutesText) ?? 0
                         let seconds = Int64(secondsText) ?? 0
-                        store.setGameTime((minutes * 60 + seconds) * 1000)
+                        let requestedRemaining = max(0, (minutes * 60 + seconds) * 1000)
+                        let targetElapsed = max(0, game.periodDurationMillis - requestedRemaining)
+                        store.setGameTime(targetElapsed)
                         editing = false
                     }
                     .buttonStyle(.borderedProminent)
@@ -652,6 +1018,9 @@ struct PlayerActionCard: View {
                     Text("Shift: \(formatDuration(stat.currentShiftTimeMillis))")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.blue)
+                    Text("Total: \(formatDuration(stat.totalTimeMillis)) • Off: \(stat.timesSubbedOff)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Spacer()
