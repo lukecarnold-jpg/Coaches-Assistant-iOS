@@ -2,11 +2,29 @@ import SwiftUI
 import UniformTypeIdentifiers
 import Combine
 
-enum AppTab: Hashable {
+enum AppTab: Hashable, CaseIterable {
     case roster
     case game
     case training
     case settings
+
+    var title: String {
+        switch self {
+        case .roster: return "Roster"
+        case .game: return "Game"
+        case .training: return "Training"
+        case .settings: return "Settings"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .roster: return "person.3.fill"
+        case .game: return "basketball.fill"
+        case .training: return "dumbbell.fill"
+        case .settings: return "gearshape.fill"
+        }
+    }
 }
 
 enum TrainingUiState {
@@ -18,35 +36,42 @@ enum TrainingUiState {
 
 struct ContentView: View {
     @EnvironmentObject private var store: AppStore
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var selectedTab: AppTab = .roster
     @State private var now = Date()
     private let liveTimer = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            RosterScreen()
-                .tabItem {
-                    Label("Roster", systemImage: "person.3.fill")
+        Group {
+            if horizontalSizeClass == .regular {
+                NavigationSplitView {
+                    List(AppTab.allCases, id: \.self) { tab in
+                        Button {
+                            selectedTab = tab
+                        } label: {
+                            HStack {
+                                Label(tab.title, systemImage: tab.icon)
+                                Spacer()
+                                if selectedTab == tab {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .navigationTitle("Basketball Rotation")
+                } detail: {
+                    selectedTabView
                 }
-                .tag(AppTab.roster)
-
-            GameScreen(now: now)
-                .tabItem {
-                    Label("Game", systemImage: "basketball.fill")
+            } else {
+                TabView(selection: $selectedTab) {
+                    tabViewItem(.roster)
+                    tabViewItem(.game)
+                    tabViewItem(.training)
+                    tabViewItem(.settings)
                 }
-                .tag(AppTab.game)
-
-            TrainingScreen()
-                .tabItem {
-                    Label("Training", systemImage: "dumbbell.fill")
-                }
-                .tag(AppTab.training)
-
-            SettingsScreen()
-                .tabItem {
-                    Label("Settings", systemImage: "gearshape.fill")
-                }
-                .tag(AppTab.settings)
+            }
         }
         .onReceive(liveTimer) { value in
             now = value
@@ -59,6 +84,42 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: store.toastMessage)
+    }
+
+    @ViewBuilder
+    private var selectedTabView: some View {
+        switch selectedTab {
+        case .roster:
+            RosterScreen()
+        case .game:
+            GameScreen(now: now)
+        case .training:
+            TrainingScreen()
+        case .settings:
+            SettingsScreen()
+        }
+    }
+
+    private func tabViewItem(_ tab: AppTab) -> some View {
+        selectedView(for: tab)
+            .tabItem {
+                Label(tab.title, systemImage: tab.icon)
+            }
+            .tag(tab)
+    }
+
+    @ViewBuilder
+    private func selectedView(for tab: AppTab) -> some View {
+        switch tab {
+        case .roster:
+            RosterScreen()
+        case .game:
+            GameScreen(now: now)
+        case .training:
+            TrainingScreen()
+        case .settings:
+            SettingsScreen()
+        }
     }
 }
 

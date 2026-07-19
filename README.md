@@ -27,6 +27,9 @@ Basketball Rotation iOS mirrors the core Basketball-Rotation app experience for 
 - Training tab
   - Age-group drill generation via Gemini API key input
   - “Coming Soon” training-module placeholders
+- Adaptive device support
+  - iPhone uses bottom tab navigation
+  - iPad uses split-view sidebar navigation
 
 ## Data storage
 
