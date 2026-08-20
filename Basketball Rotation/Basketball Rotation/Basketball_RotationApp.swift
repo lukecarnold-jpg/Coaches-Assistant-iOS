@@ -10,12 +10,22 @@ struct Basketball_RotationApp: App {
             GameEvent.self,
             GameAttendance.self,
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            return try ModelContainer(for: schema, configurations: [config])
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            // If the store is corrupt or schema-incompatible, wipe and restart clean.
+            let storeURL = config.url
+            let related = [storeURL,
+                           storeURL.deletingPathExtension().appendingPathExtension("sqlite-shm"),
+                           storeURL.deletingPathExtension().appendingPathExtension("sqlite-wal")]
+            related.forEach { try? FileManager.default.removeItem(at: $0) }
+            do {
+                return try ModelContainer(for: schema, configurations: [config])
+            } catch {
+                fatalError("Could not create ModelContainer: \(error)")
+            }
         }
     }()
 

@@ -8,22 +8,24 @@ struct LineupSetupView: View {
     @Bindable var game: Game
     let players: [Player]
 
-    @State private var selectedIDs: Set<UUID> = []
+    // Selection stored as UUIDString to match game's [String] arrays
+    @State private var selectedIDStrings: Set<String> = []
 
     private let maxLineupSize = 5
 
     var body: some View {
         NavigationStack {
-            List(players, selection: $selectedIDs) { player in
+            List(players) { player in
+                let idString = player.playerID.uuidString
                 HStack {
-                    Image(systemName: selectedIDs.contains(player.playerID) ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(selectedIDs.contains(player.playerID) ? .blue : .secondary)
+                    Image(systemName: selectedIDStrings.contains(idString) ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(selectedIDStrings.contains(idString) ? .blue : .secondary)
                     Text(player.displayName)
                     Spacer()
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    toggleSelection(player.playerID)
+                    toggleSelection(idString)
                 }
             }
             .navigationTitle("Starting Lineup")
@@ -36,40 +38,45 @@ struct LineupSetupView: View {
                     Button("Set Lineup") {
                         applyLineup()
                     }
-                    .disabled(selectedIDs.count != maxLineupSize)
+                    .disabled(selectedIDStrings.count != maxLineupSize)
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                Text("\(selectedIDs.count) / \(maxLineupSize) selected")
+                Text("\(selectedIDStrings.count) / \(maxLineupSize) selected")
                     .font(.subheadline)
-                    .foregroundStyle(selectedIDs.count == maxLineupSize ? .green : .secondary)
+                    .foregroundStyle(selectedIDStrings.count == maxLineupSize ? .green : .secondary)
                     .frame(maxWidth: .infinity)
                     .padding()
                     .background(.regularMaterial)
             }
         }
         .onAppear {
-            selectedIDs = Set(game.onCourtPlayerIDs)
-            if selectedIDs.isEmpty {
-                selectedIDs = Set(game.startingLineupIDs)
+            if !game.onCourtPlayerIDs.isEmpty {
+                selectedIDStrings = Set(game.onCourtPlayerIDs)
+            } else {
+                selectedIDStrings = Set(game.startingLineupIDs)
             }
         }
     }
 
-    private func toggleSelection(_ id: UUID) {
-        if selectedIDs.contains(id) {
-            selectedIDs.remove(id)
-        } else if selectedIDs.count < maxLineupSize {
-            selectedIDs.insert(id)
+    private func toggleSelection(_ idString: String) {
+        if selectedIDStrings.contains(idString) {
+            selectedIDStrings.remove(idString)
+        } else if selectedIDStrings.count < maxLineupSize {
+            selectedIDStrings.insert(idString)
         }
     }
 
     private func applyLineup() {
-        let newIDs = Array(selectedIDs)
+        let newIDs = Array(selectedIDStrings)
         game.startingLineupIDs = newIDs
         game.onCourtPlayerIDs = newIDs
 
-        let playerNames = players.filter { selectedIDs.contains($0.playerID) }.map { $0.name }.joined(separator: ", ")
+        let playerNames = players
+            .filter { selectedIDStrings.contains($0.playerID.uuidString) }
+            .map { $0.name }
+            .joined(separator: ", ")
+
         let event = GameEvent(
             game: game,
             eventType: .substitutionIn,

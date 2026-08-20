@@ -15,16 +15,19 @@ final class Game {
     var isEnded: Bool
 
     // Clock state
-    var elapsedSeconds: Int       // persisted snapshot
+    var elapsedSeconds: Int
     var clockIsRunning: Bool
-    var clockStartedAt: Date?     // when the current running session began
+    var clockStartedAt: Date?
 
-    // Lineup state (stored as UUID arrays)
-    var startingLineupIDs: [UUID]
-    var onCourtPlayerIDs: [UUID]
+    // Stored as UUIDString arrays — SwiftData does not reliably persist [UUID]
+    var startingLineupIDs: [String] = []
+    var onCourtPlayerIDs: [String] = []
 
-    @Relationship(deleteRule: .cascade) var events: [GameEvent] = []
-    @Relationship(deleteRule: .cascade) var attendances: [GameAttendance] = []
+    @Relationship(deleteRule: .cascade, inverse: \GameEvent.game)
+    var events: [GameEvent] = []
+
+    @Relationship(deleteRule: .cascade, inverse: \GameAttendance.game)
+    var attendances: [GameAttendance] = []
 
     init(opponentName: String, periodFormat: String, periodLengthMinutes: Int) {
         self.gameID = UUID()
@@ -40,8 +43,6 @@ final class Game {
         self.elapsedSeconds = 0
         self.clockIsRunning = false
         self.clockStartedAt = nil
-        self.startingLineupIDs = []
-        self.onCourtPlayerIDs = []
     }
 
     var totalPeriods: Int {
@@ -70,7 +71,6 @@ final class Game {
         }
     }
 
-    /// Real-time elapsed seconds accounting for a running clock.
     func currentElapsedSeconds() -> Int {
         if clockIsRunning, let startedAt = clockStartedAt {
             return elapsedSeconds + Int(Date().timeIntervalSince(startedAt))
@@ -80,5 +80,20 @@ final class Game {
 
     func remainingSeconds(at elapsed: Int) -> Int {
         max(0, periodLengthSeconds - elapsed)
+    }
+
+    // MARK: - Lineup helpers
+
+    func isOnCourt(_ player: Player) -> Bool {
+        onCourtPlayerIDs.contains(player.playerID.uuidString)
+    }
+
+    func addToOnCourt(_ player: Player) {
+        guard !isOnCourt(player) else { return }
+        onCourtPlayerIDs.append(player.playerID.uuidString)
+    }
+
+    func removeFromOnCourt(_ player: Player) {
+        onCourtPlayerIDs.removeAll { $0 == player.playerID.uuidString }
     }
 }

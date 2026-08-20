@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-enum GameEventType: String, Codable, CaseIterable {
+enum GameEventType: String, CaseIterable {
     case substitutionIn  = "Sub In"
     case substitutionOut = "Sub Out"
     case foul            = "Foul"
@@ -30,7 +30,8 @@ enum GameEventType: String, Codable, CaseIterable {
 @Model
 final class GameEvent {
     var eventID: UUID
-    var eventType: GameEventType
+    // Stored as raw String value — SwiftData doesn't reliably persist custom Codable enums
+    var eventType: String
     var timestamp: Date
     var playerID: UUID?
     var playerName: String
@@ -39,9 +40,14 @@ final class GameEvent {
     var elapsedSeconds: Int
     var game: Game?
 
+    // Computed, never persisted
+    var eventKind: GameEventType {
+        GameEventType(rawValue: eventType) ?? .note
+    }
+
     init(game: Game?, eventType: GameEventType, playerID: UUID? = nil, playerName: String = "", detail: String = "", periodNumber: Int = 1, elapsedSeconds: Int = 0) {
         self.eventID = UUID()
-        self.eventType = eventType
+        self.eventType = eventType.rawValue
         self.timestamp = Date()
         self.playerID = playerID
         self.playerName = playerName

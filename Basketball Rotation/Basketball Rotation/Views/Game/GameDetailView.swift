@@ -28,7 +28,7 @@ struct GameDetailView: View {
     }
 
     var onCourtPlayers: [Player] {
-        allPlayers.filter { game.onCourtPlayerIDs.contains($0.playerID) }
+        allPlayers.filter { game.onCourtPlayerIDs.contains($0.playerID.uuidString) }
     }
 
     var sortedEvents: [GameEvent] {
@@ -128,10 +128,10 @@ struct GameDetailView: View {
             HStack {
                 Text(game.isEnded ? "Final" : game.periodLabel)
                     .font(.caption.bold())
-                    .foregroundStyle(game.isEnded ? .secondary : .blue)
+                    .foregroundStyle(game.isEnded ? Color.gray : Color.blue)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 3)
-                    .background(game.isEnded ? .secondary.opacity(0.15) : .blue.opacity(0.1), in: Capsule())
+                    .background(game.isEnded ? Color.gray.opacity(0.15) : Color.blue.opacity(0.1), in: Capsule())
             }
 
             HStack(spacing: 0) {
@@ -494,7 +494,7 @@ struct GameDetailView: View {
             let time = formatTime(event.elapsedSeconds)
             let player = event.playerName.isEmpty ? "" : event.playerName
             let detail = event.detail.replacingOccurrences(of: ",", with: " ")
-            lines.append("\(event.periodNumber),\(time),\(event.eventType.rawValue),\(player),\(detail)")
+            lines.append("\(event.periodNumber),\(time),\(event.eventType),\(player),\(detail)")
         }
         if !game.notes.isEmpty {
             lines.append("")
@@ -547,13 +547,13 @@ struct EventRowView: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: event.eventType.systemImage)
+            Image(systemName: event.eventKind.systemImage)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(width: 20)
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
-                    Text(event.eventType.rawValue)
+                    Text(event.eventType)
                         .font(.caption.bold())
                     if !event.playerName.isEmpty {
                         Text("· \(event.playerName)")

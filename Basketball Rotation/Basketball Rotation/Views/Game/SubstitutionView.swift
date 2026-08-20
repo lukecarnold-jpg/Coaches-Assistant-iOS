@@ -12,11 +12,11 @@ struct SubstitutionView: View {
     @State private var playerIn: Player?
 
     var onCourtPlayers: [Player] {
-        allPlayers.filter { game.onCourtPlayerIDs.contains($0.playerID) }
+        allPlayers.filter { game.onCourtPlayerIDs.contains($0.playerID.uuidString) }
     }
 
     var benchPlayers: [Player] {
-        allPlayers.filter { !game.onCourtPlayerIDs.contains($0.playerID) }
+        allPlayers.filter { !game.onCourtPlayerIDs.contains($0.playerID.uuidString) }
     }
 
     var body: some View {
@@ -87,8 +87,8 @@ struct SubstitutionView: View {
     private func performSubstitution() {
         guard let out = playerOut, let inPlayer = playerIn else { return }
 
-        game.onCourtPlayerIDs.removeAll { $0 == out.playerID }
-        game.onCourtPlayerIDs.append(inPlayer.playerID)
+        game.onCourtPlayerIDs.removeAll { $0 == out.playerID.uuidString }
+        game.onCourtPlayerIDs.append(inPlayer.playerID.uuidString)
 
         let elapsed = game.currentElapsedSeconds()
 

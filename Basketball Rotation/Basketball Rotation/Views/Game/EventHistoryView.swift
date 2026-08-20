@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 struct EventHistoryView: View {
     @Environment(\.modelContext) private var modelContext
@@ -20,10 +21,10 @@ struct EventHistoryView: View {
                     ForEach(sortedEvents) { event in
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
-                                Image(systemName: event.eventType.systemImage)
+                                Image(systemName: event.eventKind.systemImage)
                                     .foregroundStyle(.secondary)
                                     .frame(width: 20)
-                                Text(event.eventType.rawValue)
+                                Text(event.eventType)
                                     .font(.subheadline.bold())
                                 if !event.playerName.isEmpty {
                                     Text("· \(event.playerName)")
@@ -98,7 +99,7 @@ struct EventHistoryView: View {
     private func periodTimeLabel(_ event: GameEvent) -> String {
         let m = event.elapsedSeconds / 60
         let s = event.elapsedSeconds % 60
-        let periodLabel = game.periodFormat == "quarters" ? "Q\(event.periodNumber)" : "H\(event.periodNumber)"
-        return "\(periodLabel) \(String(format: "%02d:%02d", m, s))"
+        let label = game.periodFormat == "quarters" ? "Q\(event.periodNumber)" : "H\(event.periodNumber)"
+        return "\(label) \(String(format: "%02d:%02d", m, s))"
     }
 }
