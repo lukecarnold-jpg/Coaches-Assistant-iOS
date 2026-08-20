@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct TrainingView: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @AppStorage("geminiAPIKey") private var geminiAPIKey = ""
     @State private var selectedAgeGroup = "U12"
     @State private var drills: [String] = []
@@ -18,6 +19,8 @@ struct TrainingView: View {
                 upcomingModulesSection
             }
             .padding()
+            .frame(maxWidth: 760)
+            .frame(maxWidth: .infinity)
         }
         .navigationTitle("Training")
         .sheet(isPresented: $showAPIKeyInput) {
@@ -46,12 +49,7 @@ struct TrainingView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            Picker("Age Group", selection: $selectedAgeGroup) {
-                ForEach(ageGroups, id: \.self) { group in
-                    Text(group).tag(group)
-                }
-            }
-            .pickerStyle(.segmented)
+            ageGroupPicker
 
             Button {
                 Task { await generateDrills() }
@@ -104,6 +102,25 @@ struct TrainingView: View {
     }
 
     // MARK: - Upcoming Modules
+
+    @ViewBuilder
+    private var ageGroupPicker: some View {
+        if horizontalSizeClass == .compact {
+            Picker("Age Group", selection: $selectedAgeGroup) {
+                ForEach(ageGroups, id: \.self) { group in
+                    Text(group).tag(group)
+                }
+            }
+            .pickerStyle(.menu)
+        } else {
+            Picker("Age Group", selection: $selectedAgeGroup) {
+                ForEach(ageGroups, id: \.self) { group in
+                    Text(group).tag(group)
+                }
+            }
+            .pickerStyle(.segmented)
+        }
+    }
 
     var upcomingModulesSection: some View {
         VStack(alignment: .leading, spacing: 12) {

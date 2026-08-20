@@ -1,16 +1,41 @@
 import SwiftUI
 import SwiftData
 
+enum AppearanceMode: String, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .system: return "System"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+}
+
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var players: [Player]
     @Query private var games: [Game]
+    @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
 
     @State private var showClearConfirm = false
     @State private var showClearSuccess = false
 
     var body: some View {
         Form {
+            Section("Appearance") {
+                Picker("Theme", selection: $appearanceMode) {
+                    ForEach(AppearanceMode.allCases) { mode in
+                        Text(mode.title).tag(mode.rawValue)
+                    }
+                }
+            }
+
             Section("Data") {
                 HStack {
                     Text("Players")

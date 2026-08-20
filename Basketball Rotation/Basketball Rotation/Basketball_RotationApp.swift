@@ -3,6 +3,8 @@ import SwiftData
 
 @main
 struct Basketball_RotationApp: App {
+    @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Player.self,
@@ -32,7 +34,16 @@ struct Basketball_RotationApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .preferredColorScheme(selectedColorScheme)
         }
         .modelContainer(sharedModelContainer)
+    }
+
+    private var selectedColorScheme: ColorScheme? {
+        switch AppearanceMode(rawValue: appearanceMode) ?? .system {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
     }
 }

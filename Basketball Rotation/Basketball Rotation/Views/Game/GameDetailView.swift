@@ -3,6 +3,7 @@ import SwiftData
 
 struct GameDetailView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Query(sort: \Player.name) private var allPlayers: [Player]
 
     @Bindable var game: Game
@@ -49,6 +50,8 @@ struct GameDetailView: View {
                 recentEventsSection
             }
             .padding()
+            .frame(maxWidth: 760)
+            .frame(maxWidth: .infinity)
         }
         .navigationTitle("vs \(game.opponentName)")
         .navigationBarTitleDisplayMode(.inline)
@@ -140,7 +143,7 @@ struct GameDetailView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text("\(game.teamScore)")
-                        .font(.system(size: 52, weight: .bold, design: .rounded))
+                        .font(.system(size: horizontalSizeClass == .compact ? 46 : 58, weight: .bold, design: .rounded))
                     if !game.isEnded {
                         HStack(spacing: 8) {
                             Button { adjustScore(team: true, delta: -1) } label: {
@@ -168,7 +171,7 @@ struct GameDetailView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                     Text("\(game.opponentScore)")
-                        .font(.system(size: 52, weight: .bold, design: .rounded))
+                        .font(.system(size: horizontalSizeClass == .compact ? 46 : 58, weight: .bold, design: .rounded))
                     if !game.isEnded {
                         HStack(spacing: 8) {
                             Button { adjustScore(team: false, delta: -1) } label: {
@@ -201,18 +204,18 @@ struct GameDetailView: View {
                 HStack {
                     VStack {
                         Text(formatTime(remaining))
-                            .font(.system(size: 36, weight: .bold, design: .monospaced))
+                            .font(.system(size: horizontalSizeClass == .compact ? 30 : 40, weight: .bold, design: .monospaced))
                         Text("Remaining")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity)
 
-                    Divider().frame(height: 50)
+                    Divider().frame(height: horizontalSizeClass == .compact ? 42 : 56)
 
                     VStack {
                         Text(formatTime(elapsed))
-                            .font(.system(size: 36, weight: .bold, design: .monospaced))
+                            .font(.system(size: horizontalSizeClass == .compact ? 30 : 40, weight: .bold, design: .monospaced))
                         Text("Elapsed")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -283,29 +286,24 @@ struct GameDetailView: View {
     // MARK: - Actions Section
 
     var actionsSection: some View {
-        VStack(spacing: 12) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 105), spacing: 12)], spacing: 12) {
             if !game.isEnded {
-                HStack(spacing: 12) {
-                    ActionButton(title: "Foul", icon: "hand.raised.fill", color: .red) {
-                        showFoulPicker = true
-                    }
-                    ActionButton(title: "MVP Vote", icon: "star.fill", color: .yellow) {
-                        showMVPPicker = true
-                    }
-                    ActionButton(title: "Sub", icon: "arrow.left.arrow.right", color: .purple) {
-                        showSubstitution = true
+                ActionButton(title: "Foul", icon: "hand.raised.fill", color: .red) {
+                    showFoulPicker = true
+                }
+                ActionButton(title: "MVP Vote", icon: "star.fill", color: .yellow) {
+                    showMVPPicker = true
+                }
+                ActionButton(title: "Sub", icon: "arrow.left.arrow.right", color: .purple) {
+                    showSubstitution = true
+                }
+                if game.currentPeriod < game.totalPeriods {
+                    ActionButton(title: "Next Period", icon: "forward.end.fill", color: .blue) {
+                        showAdvancePeriodConfirm = true
                     }
                 }
-
-                HStack(spacing: 12) {
-                    if game.currentPeriod < game.totalPeriods {
-                        ActionButton(title: "Next Period", icon: "forward.end.fill", color: .blue) {
-                            showAdvancePeriodConfirm = true
-                        }
-                    }
-                    ActionButton(title: game.currentPeriod >= game.totalPeriods ? "End Game" : "End Game", icon: "flag.checkered", color: .gray) {
-                        showEndGameConfirm = true
-                    }
+                ActionButton(title: "End Game", icon: "flag.checkered", color: .gray) {
+                    showEndGameConfirm = true
                 }
             }
         }
@@ -326,7 +324,7 @@ struct GameDetailView: View {
                                 .font(.caption)
                         }
                     }
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 8)], spacing: 8) {
                         ForEach(onCourtPlayers) { player in
                             HStack {
                                 Image(systemName: "figure.basketball")
@@ -355,7 +353,7 @@ struct GameDetailView: View {
             Text("Coaching Notes")
                 .font(.headline)
             TextEditor(text: $game.notes)
-                .frame(minHeight: 80)
+                .frame(minHeight: horizontalSizeClass == .compact ? 80 : 120)
                 .padding(4)
                 .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 8))
         }
