@@ -1,137 +1,89 @@
 # Development History
 
-This document summarizes the visible development history of **Basketball-Rotation-iOS** based on the repository state and commit trail available in the project.
+`Basketball-Rotation-iOS` is the iPhone and iPad Swift companion to the Basketball Rotation app. It was developed as a local-first coaching tool for managing rosters, tracking live games, and supporting day-to-day team operations without requiring a backend service.
 
-## Project overview
+## Project evolution
 
-Basketball-Rotation-iOS is an iPhone and iPad Swift app that mirrors the core Basketball Rotation experience with a local-first workflow for roster management, game tracking, training support, and exports. The app stores data on-device and does not require an account or server.
+### Early foundation
+The project began with the core app structure and data model for basketball workflow management.
 
-## Development milestones
-
-### 1) Foundation and app structure
-The earliest visible work established the app shell, persistence layer, and the core domain model for basketball roster/game tracking.
-
-This likely introduced:
-- SwiftUI application entry points
-- local state storage
+This foundation introduced:
+- SwiftUI app navigation
+- local persistence
 - player, game, and event models
-- basic navigation between primary app areas
+- the basic screens needed to move between roster, game, training, and settings areas
 
-### 2) Roster management
-Roster functionality was built out to support team administration without relying on a backend.
+### Roster tools
+Roster management was expanded so coaches could maintain team data directly on device.
 
-Implemented roster capabilities include:
+Key roster features include:
 - add, edit, and remove players
 - optional jersey numbers
 - CSV import and export
 
-### 3) Game-day workflow
-A major development theme was a complete live game workflow for coaches.
+### Game workflow
+A major focus of development was making the app useful on game day.
 
-This includes:
-- create/select/delete games
-- configure period format and period length
-- select starting lineups
-- manage substitutions and on-court players
-- track the live period clock with manual adjustment support
-- update team and opponent scores
-- log fouls and MVP votes
-- mark player attendance/absence
-- maintain coaching notes
-- review and edit event history
-- advance periods and end games
+The game workflow now supports:
+- creating and selecting games
+- choosing period format and period length
+- setting a starting lineup
+- substitutions and on-court player management
+- live clock tracking with manual time control
+- team and opponent scoring
+- foul logging and MVP vote tracking
+- attendance management
+- coaching notes
+- editable event history
+- advancing periods and ending games
 
-### 4) Exports and offline data handling
-The app added practical export and persistence features so coaches can keep and share information while staying offline-first.
+### Exports and offline storage
+The app was designed to stay useful even without network access.
 
-These include:
+It includes:
 - roster CSV export
-- game events CSV export
+- game event CSV export
 - coaching notes TXT export
-- local app-support storage for persistent data
+- on-device app support storage for all saved data
 
-### 5) Training support
-The app later gained a training area intended to support future coaching workflows.
+### Training support
+The training area was added to support future coaching workflows.
 
-Visible training features include:
-- Gemini API key-based drill generation by age group
-- “Coming Soon” placeholders for future training modules
+It currently includes:
+- age-group drill generation using a Gemini API key
+- placeholder content for upcoming training modules
 
-### 6) iPhone and iPad adaptation
-The interface was adapted for both phone and tablet form factors.
+### iPhone and iPad support
+The interface was adapted for both phone and tablet layouts.
 
-Notable UI behavior:
-- bottom-tab navigation on iPhone
-- split-view sidebar navigation on iPad
+- iPhone uses bottom-tab navigation
+- iPad uses split-view sidebar navigation
 
-### 7) Refinement and robustness
-Later work focused on usability, polish, and resilience.
+### Polish and reliability
+Later work improved usability and stability.
 
-Examples of refinement include:
+Notable refinements include:
 - toast notifications
 - event editing and deletion
-- settings action to clear all local data
-- safer container initialization with recovery from store corruption
+- a clear-all-local-data action in Settings
+- safer app startup with recovery if the local store becomes corrupted
 
-## Commit-style summary
+## Current focus
 
-Based on the visible history, the project appears to have evolved in a small number of iterative passes rather than through large branching development.
+The current codebase suggests a product-oriented app that emphasizes:
+- practical coach workflows
+- offline use
+- quick game-day interaction
+- simple local data management
+- adaptive UI across iPhone and iPad
 
-### Early commits
-- Established the initial app structure
-- Added the first version of core persistence and models
-- Introduced the main navigation framework
+## At a glance
 
-### Middle commits
-- Expanded roster and game operations
-- Added scoring, substitutions, attendance, and event logging
-- Improved export functionality and data handling
+`Basketball-Rotation-iOS` is a local-first basketball coaching app that helps teams:
+- manage players
+- track live games
+- record events and attendance
+- export useful game data
+- prepare drills and training ideas
 
-### Later commits
-- Added training support and AI-assisted drill generation
-- Refined iPad/iPhone layouts
-- Improved stability and UI polish
-
-## Current architecture snapshot
-
-The current app structure is centered around:
-- `AppStore` for in-memory state and local persistence
-- `ContentView` for top-level tab/split navigation
-- SwiftData models for persistent basketball entities
-- dedicated game screens for setup, details, attendance, event history, and substitutions
-
-## Development summary
-
-Basketball-Rotation-iOS developed from a foundational SwiftUI basketball tracker into a feature-rich local-first coaching app covering:
-- roster management
-- game setup and live scoring
-- substitutions and clock handling
-- attendance and event history
-- exports and training support
-- adaptive iPhone/iPad layouts
-
-The overall trajectory suggests steady product-focused iteration with strong emphasis on offline usability and practical game-day tooling.
-
-## Changelog-style highlights
-
-### Added
-- roster CRUD
-- game creation and live tracking
-- period handling and stopwatch-style clock
-- substitutions and lineup management
-- attendance tracking
-- event history and edits
-- CSV/TXT exports
-- training/drill generation support
-- iPad split-view and iPhone tab layouts
-
-### Improved
-- persistence reliability
-- user feedback via toast messages
-- local data reset flow
-- app container recovery for corrupted stores
-
-### Designed for
-- coaches
-- team managers
-- offline use on iPhone and iPad
+The project has grown steadily from a basic SwiftUI tracker into a polished coaching tool with a clear focus on simplicity and reliability.
