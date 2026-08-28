@@ -22,9 +22,11 @@ struct SettingsView: View {
     @Query private var players: [Player]
     @Query private var games: [Game]
     @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
+    @AppStorage("geminiAPIKey") private var geminiAPIKey = ""
 
     @State private var showClearConfirm = false
     @State private var showClearSuccess = false
+    @State private var showAPIKeyInput = false
 
     var body: some View {
         Form {
@@ -34,6 +36,18 @@ struct SettingsView: View {
                         Text(mode.title).tag(mode.rawValue)
                     }
                 }
+            }
+
+            Section {
+                Button {
+                    showAPIKeyInput = true
+                } label: {
+                    Label(geminiAPIKey.isEmpty ? "Add API Key" : "Update API Key", systemImage: "key")
+                }
+            } header: {
+                Text("Training")
+            } footer: {
+                Text("A Gemini API key is required to generate basketball drills. It is stored locally on this device.")
             }
 
             Section("Data") {
@@ -81,6 +95,9 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
+        .sheet(isPresented: $showAPIKeyInput) {
+            APIKeyInputView(apiKey: $geminiAPIKey)
+        }
         .confirmationDialog("Clear All Data", isPresented: $showClearConfirm, titleVisibility: .visible) {
             Button("Clear Everything", role: .destructive) {
                 clearAllData()

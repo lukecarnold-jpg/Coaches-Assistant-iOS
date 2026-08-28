@@ -393,7 +393,7 @@ struct GameDetailView: View {
     private func adjustScore(team: Bool, delta: Int) {
         if team {
             game.teamScore = max(0, game.teamScore + delta)
-            logEvent(type: delta > 0 ? .teamScore : .teamScore, player: nil, detail: delta > 0 ? "+\(delta)" : "\(delta)")
+            logEvent(type: .teamScore, player: nil, detail: delta > 0 ? "+\(delta)" : "\(delta)")
         } else {
             game.opponentScore = max(0, game.opponentScore + delta)
             logEvent(type: .opponentScore, player: nil, detail: delta > 0 ? "+\(delta)" : "\(delta)")
@@ -492,7 +492,8 @@ struct GameDetailView: View {
             let time = formatTime(event.elapsedSeconds)
             let player = event.playerName.isEmpty ? "" : event.playerName
             let detail = event.detail.replacingOccurrences(of: ",", with: " ")
-            lines.append("\(event.periodNumber),\(time),\(event.eventType),\(player),\(detail)")
+            let eventName = event.displayName(opponentName: game.opponentName)
+            lines.append("\(event.periodNumber),\(time),\(eventName),\(player),\(detail)")
         }
         if !game.notes.isEmpty {
             lines.append("")
@@ -551,7 +552,7 @@ struct EventRowView: View {
                 .frame(width: 20)
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
-                    Text(event.eventType)
+                    Text(event.displayName(opponentName: event.game?.opponentName ?? ""))
                         .font(.caption.bold())
                     if !event.playerName.isEmpty {
                         Text("· \(event.playerName)")

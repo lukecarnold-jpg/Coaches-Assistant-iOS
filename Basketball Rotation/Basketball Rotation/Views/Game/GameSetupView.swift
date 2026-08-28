@@ -24,7 +24,13 @@ struct GameSetupView: View {
                     }
                     .pickerStyle(.segmented)
 
-                    Stepper("\(periodLengthMinutes) minutes per period", value: $periodLengthMinutes, in: 1...60)
+                    Picker("Minutes per Period", selection: $periodLengthMinutes) {
+                        ForEach(1...25, id: \.self) { minutes in
+                            Text("\(minutes) minutes")
+                                .tag(minutes)
+                        }
+                    }
+                    .pickerStyle(.menu)
                 }
             }
             .navigationTitle("New Game")

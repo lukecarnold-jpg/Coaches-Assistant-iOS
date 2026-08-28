@@ -7,7 +7,6 @@ struct TrainingView: View {
     @State private var drills: [String] = []
     @State private var isGenerating = false
     @State private var errorMessage: String?
-    @State private var showAPIKeyInput = false
 
     let ageGroups = ["U8", "U10", "U12", "U14", "U16", "U18", "Senior"]
 
@@ -23,9 +22,6 @@ struct TrainingView: View {
             .frame(maxWidth: .infinity)
         }
         .navigationTitle("Training")
-        .sheet(isPresented: $showAPIKeyInput) {
-            APIKeyInputView(apiKey: $geminiAPIKey)
-        }
     }
 
     // MARK: - Drill Generator
@@ -35,14 +31,6 @@ struct TrainingView: View {
             HStack {
                 Text("Drill Generator")
                     .font(.title2.bold())
-                Spacer()
-                Button {
-                    showAPIKeyInput = true
-                } label: {
-                    Label(geminiAPIKey.isEmpty ? "Add API Key" : "API Key", systemImage: "key")
-                        .font(.caption)
-                }
-                .buttonStyle(.bordered)
             }
 
             Text("Generate age-appropriate basketball drills using Gemini AI.")

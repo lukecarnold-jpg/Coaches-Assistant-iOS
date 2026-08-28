@@ -24,7 +24,7 @@ struct EventHistoryView: View {
                                 Image(systemName: event.eventKind.systemImage)
                                     .foregroundStyle(.secondary)
                                     .frame(width: 20)
-                                Text(event.eventType)
+                                Text(event.displayName(opponentName: game.opponentName))
                                     .font(.subheadline.bold())
                                 if !event.playerName.isEmpty {
                                     Text("· \(event.playerName)")

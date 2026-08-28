@@ -45,6 +45,13 @@ final class GameEvent {
         GameEventType(rawValue: eventType) ?? .note
     }
 
+    func displayName(opponentName: String) -> String {
+        guard eventKind == .opponentScore, !opponentName.isEmpty else {
+            return eventType
+        }
+        return "\(opponentName) Score"
+    }
+
     init(game: Game?, eventType: GameEventType, playerID: UUID? = nil, playerName: String = "", detail: String = "", periodNumber: Int = 1, elapsedSeconds: Int = 0) {
         self.eventID = UUID()
         self.eventType = eventType.rawValue
