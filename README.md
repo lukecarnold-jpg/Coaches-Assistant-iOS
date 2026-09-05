@@ -11,10 +11,10 @@ Basketball Rotation iOS mirrors the core Basketball-Rotation app experience for 
 - Game management
   - Create/select/delete games
   - Period format setup (quarters or halves) with configurable period length
-  - Starting lineup selection (5 players)
-  - Substitutions
+  - Starting lineup selection (5 players), ordered by jersey number
+  - Substitutions, including multi-player substitutions in a single action
   - Live period clock (start/stop/reset/manual time set) with remaining + elapsed display
-  - Team and opponent score adjustments
+  - Team and opponent score adjustments, with optional per-player scorer selection
   - Foul logging and MVP vote tracking
   - Attendance management (mark absent players per game)
   - Coaching notes per game with TXT export
@@ -25,26 +25,31 @@ Basketball Rotation iOS mirrors the core Basketball-Rotation app experience for 
   - Game events CSV (includes game notes)
   - Coaching notes TXT
 - Training tab
-  - Age-group drill generation via Gemini API key input
+  - Age-group drill generation using a Gemini API key
   - “Coming Soon” training-module placeholders
+- Settings
+  - Appearance theme (system/light/dark)
+  - Gemini API key management (stored locally on-device)
+  - Data summary (player and game counts) and app version/storage info
+  - Clear all local data
 - Adaptive device support
   - iPhone uses bottom tab navigation
   - iPad uses split-view sidebar navigation
 
 ## Data storage
 
-All app data is stored locally on-device in app support storage:
+All app data is persisted locally on-device using SwiftData:
 
 - players
 - games
 - game events
-- attendance, notes, scores, timer, and period state
+- attendance
 
-No account or server is required.
+App settings (appearance theme, Gemini API key) are stored locally via `AppStorage`. No account or server is required.
 
 ## Main screens
 
 - **Roster**: player management + CSV import/export
 - **Game**: live tracking, lineup/subs, period flow, stats, notes, event management, exports
 - **Training**: age-group drill generation and upcoming-module placeholders
-- **Settings**: clear all local data
+- **Settings**: appearance, API key, data overview, clear all local data
