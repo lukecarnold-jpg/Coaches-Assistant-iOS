@@ -68,6 +68,23 @@ Notable refinements include:
 - a clear-all-local-data action in Settings
 - safer app startup with recovery if the local store becomes corrupted
 
+### Settings and appearance
+Settings grew into a dedicated control center for app-wide preferences.
+
+- appearance theme picker (system/light/dark)
+- Gemini API key input moved from Training into Settings
+- at-a-glance player/game counts and app version/storage info
+
+### Game-day refinements
+Further game workflow polish focused on faster, more accurate live tracking.
+
+- multi-player substitutions in a single action
+- optional per-player scorer selection when adjusting the score
+- starting lineup selection ordered by jersey number
+
+### Project restructuring
+The Xcode project was reorganized under a single `Basketball Rotation/` directory (replacing an earlier, duplicate `BasketballRotationiOS` layout), consolidating the app target, models, views, and test targets under one consistent structure.
+
 ## Current focus
 
 The current codebase suggests a product-oriented app that emphasizes:

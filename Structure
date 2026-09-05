@@ -1,18 +1,35 @@
-BasketballRotationiOS/
-├── BasketballRotationiOS.xcodeproj
-├── BasketballRotationiOS/
-│   ├── App/
-│   │   └── BasketballRotationiOSApp.swift
+Basketball Rotation/
+├── Basketball Rotation.xcodeproj/
+├── Basketball Rotation/
+│   ├── Basketball_RotationApp.swift        (app entry point, SwiftData model container setup)
+│   ├── ContentView.swift                   (root navigation: tab view on iPhone, split view on iPad)
 │   ├── Models/
-│   │   └── Models.swift
-│   ├── Store/
-│   │   └── AppStore.swift
+│   │   ├── Player.swift
+│   │   ├── Game.swift
+│   │   ├── GameEvent.swift
+│   │   └── GameAttendance.swift
 │   ├── Views/
-│   │   └── ContentView.swift
-│   ├── Assets.xcassets/
-│   │   ├── AccentColor.colorset/
-│   │   ├── AppIcon.appiconset/
-│   │   └── Contents.json
-│   └── Preview Content/
-│       └── Preview Assets.xcassets/
-└── BasketballRotationiOSTests/          (optional)
+│   │   ├── Roster/
+│   │   │   ├── RosterView.swift
+│   │   │   └── PlayerEditView.swift
+│   │   ├── Game/
+│   │   │   ├── GameListView.swift
+│   │   │   ├── GameSetupView.swift
+│   │   │   ├── GameDetailView.swift
+│   │   │   ├── LineupSetupView.swift
+│   │   │   ├── SubstitutionView.swift
+│   │   │   ├── AttendanceView.swift
+│   │   │   └── EventHistoryView.swift
+│   │   ├── Training/
+│   │   │   └── TrainingView.swift
+│   │   └── Settings/
+│   │       └── SettingsView.swift
+│   └── Assets.xcassets/
+│       ├── AccentColor.colorset/
+│       ├── AppIcon.appiconset/
+│       └── Contents.json
+├── Basketball RotationTests/
+│   └── Basketball_RotationTests.swift
+└── Basketball RotationUITests/
+    ├── Basketball_RotationUITests.swift
+    └── Basketball_RotationUITestsLaunchTests.swift
