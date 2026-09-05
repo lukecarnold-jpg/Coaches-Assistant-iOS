@@ -22,6 +22,7 @@ struct GameDetailView: View {
     @State private var showShareSheet = false
     @State private var manualMinutes = ""
     @State private var manualSeconds = ""
+    @State private var showTeamScoreSheet = false
 
     var presentPlayers: [Player] {
         let absentIDs = Set(game.attendances.filter { $0.isAbsent }.map { $0.playerID })
@@ -106,6 +107,11 @@ struct GameDetailView: View {
         .sheet(isPresented: $showShareSheet) {
             ShareSheet(items: [exportContent])
         }
+        .sheet(isPresented: $showTeamScoreSheet) {
+            TeamScoreSheet(players: onCourtPlayers.isEmpty ? presentPlayers : onCourtPlayers) { player, points in
+                logTeamScore(player: player, points: points)
+            }
+        }
         .confirmationDialog("Advance Period", isPresented: $showAdvancePeriodConfirm) {
             Button("Advance to \(nextPeriodLabel())") {
                 advancePeriod()
@@ -151,7 +157,7 @@ struct GameDetailView: View {
                                     .font(.title2)
                                     .foregroundStyle(.secondary)
                             }
-                            Button { adjustScore(team: true, delta: 1) } label: {
+                            Button { showTeamScoreSheet = true } label: {
                                 Image(systemName: "plus.circle.fill")
                                     .font(.title2)
                                     .foregroundStyle(.blue)
@@ -390,6 +396,11 @@ struct GameDetailView: View {
 
     // MARK: - Actions
 
+    private func logTeamScore(player: Player?, points: Int) {
+        game.teamScore += points
+        logEvent(type: .teamScore, player: player, detail: "+\(points)")
+    }
+
     private func adjustScore(team: Bool, delta: Int) {
         if team {
             game.teamScore = max(0, game.teamScore + delta)
@@ -597,6 +608,70 @@ struct PlayerPickerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+struct TeamScoreSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let players: [Player]
+    let onConfirm: (Player?, Int) -> Void
+
+    @State private var selectedPlayer: Player?
+    @State private var points = 2
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Points Scored") {
+                    Picker("Points", selection: $points) {
+                        Text("1 pt  (Free Throw)").tag(1)
+                        Text("2 pts").tag(2)
+                        Text("3 pts").tag(3)
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                }
+
+                Section {
+                    if players.isEmpty {
+                        Text("No players available — set lineup first.")
+                            .foregroundStyle(.secondary)
+                            .font(.subheadline)
+                    } else {
+                        ForEach(players) { player in
+                            Button {
+                                selectedPlayer = selectedPlayer?.playerID == player.playerID ? nil : player
+                            } label: {
+                                HStack {
+                                    Text(player.displayName)
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                    if selectedPlayer?.playerID == player.playerID {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(.blue)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Scorer (Optional)")
+                }
+            }
+            .navigationTitle("Team Score")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Log +\(points)") {
+                        onConfirm(selectedPlayer, points)
+                        dismiss()
+                    }
                 }
             }
         }

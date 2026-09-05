@@ -92,8 +92,24 @@ struct EventHistoryView: View {
     }
 
     private func deleteEvent(_ event: GameEvent) {
+        // Revert the score contribution of the deleted event
+        if event.eventKind == .teamScore {
+            let delta = parseScoreDelta(event.detail)
+            game.teamScore = max(0, game.teamScore - delta)
+        } else if event.eventKind == .opponentScore {
+            let delta = parseScoreDelta(event.detail)
+            game.opponentScore = max(0, game.opponentScore - delta)
+        }
         game.events.removeAll { $0.eventID == event.eventID }
         modelContext.delete(event)
+    }
+
+    // Parses "+2", "-1", "+3" etc. Negative delta means a correction that decreased the score.
+    private func parseScoreDelta(_ detail: String) -> Int {
+        let trimmed = detail.trimmingCharacters(in: .whitespaces)
+        let digits = trimmed.filter { $0.isNumber }
+        let value = Int(String(digits.prefix(2))) ?? 1
+        return trimmed.hasPrefix("-") ? -value : value
     }
 
     private func periodTimeLabel(_ event: GameEvent) -> String {

@@ -13,9 +13,20 @@ struct LineupSetupView: View {
 
     private let maxLineupSize = 5
 
+    var sortedPlayers: [Player] {
+        players.sorted {
+            switch ($0.jerseyNumber, $1.jerseyNumber) {
+            case (let a?, let b?): return a < b
+            case (nil, nil):       return $0.name < $1.name
+            case (_?, nil):        return true
+            case (nil, _?):        return false
+            }
+        }
+    }
+
     var body: some View {
         NavigationStack {
-            List(players) { player in
+            List(sortedPlayers) { player in
                 let idString = player.playerID.uuidString
                 HStack {
                     Image(systemName: selectedIDStrings.contains(idString) ? "checkmark.circle.fill" : "circle")
