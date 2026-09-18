@@ -2,13 +2,18 @@ import SwiftUI
 
 struct TrainingView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @AppStorage("geminiAPIKey") private var geminiAPIKey = ""
+    @State private var keyStore = AIAPIKeyStore.shared
+    @AppStorage("selectedAIProvider") private var selectedProviderRaw = AIProvider.gemini.rawValue
     @State private var selectedAgeGroup = "U12"
     @State private var drills: [String] = []
     @State private var isGenerating = false
     @State private var errorMessage: String?
 
     let ageGroups = ["U8", "U10", "U12", "U14", "U16", "U18", "Senior"]
+
+    private var selectedProvider: AIProvider {
+        AIProvider(rawValue: selectedProviderRaw) ?? .gemini
+    }
 
     var body: some View {
         ScrollView {
@@ -33,7 +38,7 @@ struct TrainingView: View {
                     .font(.title2.bold())
             }
 
-            Text("Generate age-appropriate basketball drills using Gemini AI.")
+            Text("Generate age-appropriate basketball drills using \(selectedProvider.displayName).")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
@@ -53,10 +58,10 @@ struct TrainingView: View {
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
-            .disabled(isGenerating || geminiAPIKey.isEmpty)
+            .disabled(isGenerating || !keyStore.isConfigured(selectedProvider))
 
-            if geminiAPIKey.isEmpty {
-                Text("Add your Gemini API key to use drill generation.")
+            if !keyStore.isConfigured(selectedProvider) {
+                Text("Set up \(selectedProvider.displayName) in Settings to use drill generation.")
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
@@ -152,7 +157,7 @@ struct TrainingView: View {
         ]
     }
 
-    // MARK: - Gemini API
+    // MARK: - Drill Generation
 
     @MainActor
     func generateDrills() async {
@@ -160,103 +165,14 @@ struct TrainingView: View {
         errorMessage = nil
         drills = []
 
-        let prompt = "Generate 5 basketball practice drills suitable for \(selectedAgeGroup) players. For each drill, provide a short name followed by a 1-2 sentence description. Format as a numbered list with just the drill name and description, no extra headers."
-
-        let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=\(geminiAPIKey)")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let body: [String: Any] = [
-            "contents": [["parts": [["text": prompt]]]]
-        ]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                let msg = String(data: data, encoding: .utf8) ?? "Unknown error"
-                errorMessage = "API error: \(msg.prefix(200))"
-                isGenerating = false
-                return
-            }
-
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let candidates = json["candidates"] as? [[String: Any]],
-               let content = candidates.first?["content"] as? [String: Any],
-               let parts = content["parts"] as? [[String: Any]],
-               let text = parts.first?["text"] as? String {
-                drills = parseDrills(from: text)
-            } else {
-                errorMessage = "Could not parse response."
-            }
+            drills = try await selectedProvider.drillService.generateDrills(
+                ageGroup: selectedAgeGroup,
+                apiKey: keyStore.apiKey(for: selectedProvider)
+            )
         } catch {
             errorMessage = error.localizedDescription
         }
         isGenerating = false
-    }
-
-    func parseDrills(from text: String) -> [String] {
-        let lines = text.components(separatedBy: "\n")
-        var result: [String] = []
-        var currentDrill = ""
-
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty { continue }
-            // Check if line starts with a number (new drill)
-            let isNewDrill = trimmed.first?.isNumber == true && trimmed.contains(".")
-            if isNewDrill && !currentDrill.isEmpty {
-                result.append(currentDrill.trimmingCharacters(in: .whitespacesAndNewlines))
-                currentDrill = trimmed
-            } else if isNewDrill {
-                currentDrill = trimmed
-            } else {
-                currentDrill += " " + trimmed
-            }
-        }
-        if !currentDrill.isEmpty {
-            result.append(currentDrill.trimmingCharacters(in: .whitespacesAndNewlines))
-        }
-        return result.prefix(5).map { drill in
-            // Strip leading "1. " numbering
-            drill.replacingOccurrences(of: #"^\d+\.\s*"#, with: "", options: .regularExpression)
-        }
-    }
-}
-
-struct APIKeyInputView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Binding var apiKey: String
-    @State private var inputText = ""
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    SecureField("Gemini API Key", text: $inputText)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                } header: {
-                    Text("Gemini API Key")
-                } footer: {
-                    Text("Your API key is stored locally on-device only. Get a key from Google AI Studio.")
-                }
-            }
-            .navigationTitle("API Key")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        apiKey = inputText
-                        dismiss()
-                    }
-                }
-            }
-            .onAppear { inputText = apiKey }
-        }
     }
 }

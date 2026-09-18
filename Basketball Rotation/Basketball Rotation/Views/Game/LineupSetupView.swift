@@ -79,24 +79,66 @@ struct LineupSetupView: View {
     }
 
     private func applyLineup() {
-        let newIDs = Array(selectedIDStrings)
-        game.startingLineupIDs = newIDs
-        game.onCourtPlayerIDs = newIDs
+        let previousIDs = Set(game.onCourtPlayerIDs)
 
-        let playerNames = players
-            .filter { selectedIDStrings.contains($0.playerID.uuidString) }
-            .map { $0.name }
-            .joined(separator: ", ")
+        if previousIDs.isEmpty {
+            // First time the lineup is set for this game — record it as a single
+            // "starting lineup" event rather than five individual sub-ins.
+            game.startingLineupIDs = Array(selectedIDStrings)
+            game.onCourtPlayerIDs = Array(selectedIDStrings)
 
-        let event = GameEvent(
-            game: game,
-            eventType: .substitutionIn,
-            detail: "Starting lineup: \(playerNames)",
-            periodNumber: game.currentPeriod,
-            elapsedSeconds: game.currentElapsedSeconds()
-        )
-        modelContext.insert(event)
-        game.events.append(event)
+            let playerNames = players
+                .filter { selectedIDStrings.contains($0.playerID.uuidString) }
+                .map { $0.name }
+                .joined(separator: ", ")
+
+            let event = GameEvent(
+                game: game,
+                eventType: .substitutionIn,
+                detail: "Starting lineup: \(playerNames)",
+                periodNumber: game.currentPeriod,
+                elapsedSeconds: game.currentElapsedSeconds()
+            )
+            modelContext.insert(event)
+            game.events.append(event)
+        } else {
+            // Adjusting the lineup mid-game — log a proper in/out event per player so
+            // playing-time tracking and event history stay accurate. `startingLineupIDs`
+            // is left untouched since it records who actually started the game.
+            let leaving = previousIDs.subtracting(selectedIDStrings)
+            let entering = selectedIDStrings.subtracting(previousIDs)
+            let elapsed = game.currentElapsedSeconds()
+
+            for idString in leaving {
+                guard let player = players.first(where: { $0.playerID.uuidString == idString }) else { continue }
+                let event = GameEvent(
+                    game: game,
+                    eventType: .substitutionOut,
+                    playerID: player.playerID,
+                    playerName: player.name,
+                    detail: "Out (lineup change)",
+                    periodNumber: game.currentPeriod,
+                    elapsedSeconds: elapsed
+                )
+                modelContext.insert(event)
+                game.events.append(event)
+            }
+            for idString in entering {
+                guard let player = players.first(where: { $0.playerID.uuidString == idString }) else { continue }
+                let event = GameEvent(
+                    game: game,
+                    eventType: .substitutionIn,
+                    playerID: player.playerID,
+                    playerName: player.name,
+                    detail: "In (lineup change)",
+                    periodNumber: game.currentPeriod,
+                    elapsedSeconds: elapsed
+                )
+                modelContext.insert(event)
+                game.events.append(event)
+            }
+            game.onCourtPlayerIDs = Array(selectedIDStrings)
+        }
         dismiss()
     }
 }

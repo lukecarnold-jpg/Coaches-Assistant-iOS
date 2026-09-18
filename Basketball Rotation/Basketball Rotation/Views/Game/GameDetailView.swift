@@ -12,6 +12,7 @@ struct GameDetailView: View {
     @State private var showSubstitution = false
     @State private var showAttendance = false
     @State private var showEventHistory = false
+    @State private var showPlayingTime = false
     @State private var showFoulPicker = false
     @State private var showMVPPicker = false
     @State private var showManualClock = false
@@ -65,6 +66,9 @@ struct GameDetailView: View {
                     Button { showEventHistory = true } label: {
                         Label("Event History", systemImage: "list.bullet.clipboard")
                     }
+                    Button { showPlayingTime = true } label: {
+                        Label("Playing Time", systemImage: "stopwatch")
+                    }
                     Divider()
                     Button { exportGameCSV() } label: {
                         Label("Export Events CSV", systemImage: "tablecells")
@@ -88,6 +92,9 @@ struct GameDetailView: View {
         }
         .navigationDestination(isPresented: $showEventHistory) {
             EventHistoryView(game: game)
+        }
+        .navigationDestination(isPresented: $showPlayingTime) {
+            PlayingTimeView(game: game)
         }
         .sheet(isPresented: $showFoulPicker) {
             PlayerPickerSheet(title: "Log Foul", players: presentPlayers) { player in
@@ -398,16 +405,19 @@ struct GameDetailView: View {
 
     private func logTeamScore(player: Player?, points: Int) {
         game.teamScore += points
-        logEvent(type: .teamScore, player: player, detail: "+\(points)")
+        logEvent(type: .teamScore, player: player, detail: "+\(points)", scoreDelta: points)
     }
 
     private func adjustScore(team: Bool, delta: Int) {
+        let previous = team ? game.teamScore : game.opponentScore
+        let clamped = max(0, previous + delta)
+        let appliedDelta = clamped - previous
         if team {
-            game.teamScore = max(0, game.teamScore + delta)
-            logEvent(type: .teamScore, player: nil, detail: delta > 0 ? "+\(delta)" : "\(delta)")
+            game.teamScore = clamped
+            logEvent(type: .teamScore, player: nil, detail: appliedDelta > 0 ? "+\(appliedDelta)" : "\(appliedDelta)", scoreDelta: appliedDelta)
         } else {
-            game.opponentScore = max(0, game.opponentScore + delta)
-            logEvent(type: .opponentScore, player: nil, detail: delta > 0 ? "+\(delta)" : "\(delta)")
+            game.opponentScore = clamped
+            logEvent(type: .opponentScore, player: nil, detail: appliedDelta > 0 ? "+\(appliedDelta)" : "\(appliedDelta)", scoreDelta: appliedDelta)
         }
     }
 
@@ -469,7 +479,7 @@ struct GameDetailView: View {
         }
     }
 
-    private func logEvent(type: GameEventType, player: Player?, detail: String) {
+    private func logEvent(type: GameEventType, player: Player?, detail: String, scoreDelta: Int = 0) {
         let event = GameEvent(
             game: game,
             eventType: type,
@@ -477,7 +487,8 @@ struct GameDetailView: View {
             playerName: player?.name ?? "",
             detail: detail,
             periodNumber: game.currentPeriod,
-            elapsedSeconds: game.currentElapsedSeconds()
+            elapsedSeconds: game.currentElapsedSeconds(),
+            scoreDelta: scoreDelta
         )
         modelContext.insert(event)
         game.events.append(event)

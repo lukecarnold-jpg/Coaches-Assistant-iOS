@@ -98,7 +98,7 @@ struct RosterView: View {
         var lines = ["Name,Jersey Number"]
         for player in players {
             let jersey = player.jerseyNumber.map { String($0) } ?? ""
-            lines.append("\(csvEscape(player.name)),\(jersey)")
+            lines.append("\(RosterCSV.escape(player.name)),\(jersey)")
         }
         csvExportContent = lines.joined(separator: "\n")
         showExportSheet = true
@@ -111,7 +111,9 @@ struct RosterView: View {
             defer { url.stopAccessingSecurityScopedResource() }
             do {
                 let content = try String(contentsOf: url, encoding: .utf8)
-                parseAndImportCSV(content)
+                for parsed in RosterCSV.parse(content) {
+                    modelContext.insert(Player(name: parsed.name, jerseyNumber: parsed.jerseyNumber))
+                }
             } catch {
                 importError = error.localizedDescription
                 showImportError = true
@@ -120,53 +122,6 @@ struct RosterView: View {
             importError = error.localizedDescription
             showImportError = true
         }
-    }
-
-    private func parseAndImportCSV(_ content: String) {
-        let lines = content.components(separatedBy: .newlines).filter { !$0.isEmpty }
-        guard lines.count > 1 else { return }
-
-        let header = lines[0].lowercased()
-        let nameIndex = csvColumnIndex(header: header, candidates: ["name", "player"]) ?? 0
-        let jerseyIndex = csvColumnIndex(header: header, candidates: ["jersey", "number", "#"])
-
-        for line in lines.dropFirst() {
-            let cols = csvParseLine(line)
-            guard cols.indices.contains(nameIndex) else { continue }
-            let name = cols[nameIndex].trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !name.isEmpty else { continue }
-            let jerseyNum: Int? = jerseyIndex.flatMap { cols.indices.contains($0) ? Int(cols[$0].trimmingCharacters(in: .whitespacesAndNewlines)) : nil }
-            modelContext.insert(Player(name: name, jerseyNumber: jerseyNum))
-        }
-    }
-
-    private func csvColumnIndex(header: String, candidates: [String]) -> Int? {
-        let cols = csvParseLine(header)
-        for (i, col) in cols.enumerated() {
-            let trimmed = col.trimmingCharacters(in: .whitespacesAndNewlines)
-            if candidates.contains(where: { trimmed.contains($0) }) { return i }
-        }
-        return nil
-    }
-
-    private func csvParseLine(_ line: String) -> [String] {
-        var result: [String] = []
-        var current = ""
-        var inQuotes = false
-        for char in line {
-            if char == "\"" { inQuotes.toggle() }
-            else if char == "," && !inQuotes { result.append(current); current = "" }
-            else { current.append(char) }
-        }
-        result.append(current)
-        return result
-    }
-
-    private func csvEscape(_ value: String) -> String {
-        if value.contains(",") || value.contains("\"") || value.contains("\n") {
-            return "\"\(value.replacingOccurrences(of: "\"", with: "\"\""))\""
-        }
-        return value
     }
 }
 

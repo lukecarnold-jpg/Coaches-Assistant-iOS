@@ -38,6 +38,9 @@ final class GameEvent {
     var detail: String
     var periodNumber: Int
     var elapsedSeconds: Int
+    // Signed score change this event applied to teamScore/opponentScore (0 for non-scoring events).
+    // Stored explicitly rather than re-parsed from `detail` so reverting a deletion is exact.
+    var scoreDelta: Int = 0
     var game: Game?
 
     // Computed, never persisted
@@ -52,7 +55,7 @@ final class GameEvent {
         return "\(opponentName) Score"
     }
 
-    init(game: Game?, eventType: GameEventType, playerID: UUID? = nil, playerName: String = "", detail: String = "", periodNumber: Int = 1, elapsedSeconds: Int = 0) {
+    init(game: Game?, eventType: GameEventType, playerID: UUID? = nil, playerName: String = "", detail: String = "", periodNumber: Int = 1, elapsedSeconds: Int = 0, scoreDelta: Int = 0) {
         self.eventID = UUID()
         self.eventType = eventType.rawValue
         self.timestamp = Date()
@@ -61,6 +64,7 @@ final class GameEvent {
         self.detail = detail
         self.periodNumber = periodNumber
         self.elapsedSeconds = elapsedSeconds
+        self.scoreDelta = scoreDelta
         self.game = game
     }
 }

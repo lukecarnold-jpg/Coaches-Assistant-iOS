@@ -96,4 +96,55 @@ final class Game {
     func removeFromOnCourt(_ player: Player) {
         onCourtPlayerIDs.removeAll { $0 == player.playerID.uuidString }
     }
+
+    // MARK: - Playing time
+
+    /// Total seconds each player has spent on court, reconstructed from the substitution
+    /// event log rather than tracked live — so it stays correct even if events are edited
+    /// or deleted after the fact.
+    ///
+    /// Cumulative "game seconds" (as opposed to per-period `elapsedSeconds`) are derived
+    /// from `periodNumber`/`elapsedSeconds` on each event, assuming a fixed period length.
+    func minutesPlayedSeconds() -> [UUID: Int] {
+        var totals: [UUID: Int] = [:]
+        var intervalStart: [UUID: Int] = [:]
+
+        func gameSeconds(period: Int, elapsed: Int) -> Int {
+            max(0, period - 1) * periodLengthSeconds + elapsed
+        }
+
+        for idString in startingLineupIDs {
+            if let id = UUID(uuidString: idString) {
+                intervalStart[id] = 0
+            }
+        }
+
+        for event in events.sorted(by: { $0.timestamp < $1.timestamp }) {
+            let g = gameSeconds(period: event.periodNumber, elapsed: event.elapsedSeconds)
+            switch event.eventKind {
+            case .substitutionIn:
+                guard let playerID = event.playerID else { continue }
+                intervalStart[playerID] = g
+            case .substitutionOut:
+                guard let playerID = event.playerID, let start = intervalStart.removeValue(forKey: playerID) else { continue }
+                totals[playerID, default: 0] += max(0, g - start)
+            case .gameEnd:
+                for (playerID, start) in intervalStart {
+                    totals[playerID, default: 0] += max(0, g - start)
+                }
+                intervalStart.removeAll()
+            default:
+                break
+            }
+        }
+
+        if !isEnded {
+            let liveGameSeconds = gameSeconds(period: currentPeriod, elapsed: currentElapsedSeconds())
+            for (playerID, start) in intervalStart {
+                totals[playerID, default: 0] += max(0, liveGameSeconds - start)
+            }
+        }
+
+        return totals
+    }
 }

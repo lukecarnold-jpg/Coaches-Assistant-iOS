@@ -1,7 +1,9 @@
 import SwiftUI
+import SwiftData
 
 struct AttendanceView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @Bindable var game: Game
 
     var sortedAttendances: [GameAttendance] {
@@ -30,7 +32,7 @@ struct AttendanceView: View {
                             Spacer()
                             Toggle("", isOn: Binding(
                                 get: { attendance.isAbsent },
-                                set: { attendance.isAbsent = $0 }
+                                set: { setAbsent($0, for: attendance) }
                             ))
                             .labelsHidden()
                         }
@@ -45,5 +47,25 @@ struct AttendanceView: View {
                 }
             }
         }
+    }
+
+    // Marking a player absent while they're on court benches them immediately —
+    // otherwise attendance and the on-court roster silently disagree.
+    private func setAbsent(_ isAbsent: Bool, for attendance: GameAttendance) {
+        attendance.isAbsent = isAbsent
+        guard isAbsent, game.onCourtPlayerIDs.contains(attendance.playerID.uuidString) else { return }
+
+        game.onCourtPlayerIDs.removeAll { $0 == attendance.playerID.uuidString }
+        let event = GameEvent(
+            game: game,
+            eventType: .substitutionOut,
+            playerID: attendance.playerID,
+            playerName: attendance.playerName,
+            detail: "Marked absent",
+            periodNumber: game.currentPeriod,
+            elapsedSeconds: game.currentElapsedSeconds()
+        )
+        modelContext.insert(event)
+        game.events.append(event)
     }
 }

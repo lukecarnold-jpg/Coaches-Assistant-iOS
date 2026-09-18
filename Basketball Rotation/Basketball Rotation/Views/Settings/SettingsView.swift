@@ -22,11 +22,12 @@ struct SettingsView: View {
     @Query private var players: [Player]
     @Query private var games: [Game]
     @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
-    @AppStorage("geminiAPIKey") private var geminiAPIKey = ""
+    @AppStorage("selectedAIProvider") private var selectedProviderRaw = AIProvider.gemini.rawValue
+    @State private var keyStore = AIAPIKeyStore.shared
 
     @State private var showClearConfirm = false
     @State private var showClearSuccess = false
-    @State private var showAPIKeyInput = false
+    @State private var editingProvider: AIProvider?
 
     var body: some View {
         Form {
@@ -39,15 +40,29 @@ struct SettingsView: View {
             }
 
             Section {
-                Button {
-                    showAPIKeyInput = true
-                } label: {
-                    Label(geminiAPIKey.isEmpty ? "Add API Key" : "Update API Key", systemImage: "key")
+                Picker("Provider", selection: $selectedProviderRaw) {
+                    ForEach(AIProvider.allCases) { provider in
+                        Text(provider.displayName).tag(provider.rawValue)
+                    }
+                }
+                ForEach(AIProvider.allCases) { provider in
+                    Button {
+                        editingProvider = provider
+                    } label: {
+                        HStack {
+                            Label(provider.displayName, systemImage: "key")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Text(keyStore.isConfigured(provider) ? "Configured" : "Not Set")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
             } header: {
-                Text("Training")
+                Text("AI Drill Generator")
             } footer: {
-                Text("A Gemini API key is required to generate basketball drills. It is stored locally on this device.")
+                Text("Choose which provider generates drills and add its API key. Keys are stored securely in the Keychain on this device.")
             }
 
             Section("Data") {
@@ -95,8 +110,16 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
-        .sheet(isPresented: $showAPIKeyInput) {
-            APIKeyInputView(apiKey: $geminiAPIKey)
+        .sheet(item: $editingProvider) { provider in
+            if provider == .custom {
+                CustomProviderConfigView(currentKey: keyStore.apiKey(for: provider)) { newValue in
+                    keyStore.setAPIKey(newValue, for: provider)
+                }
+            } else {
+                APIKeyInputView(provider: provider, currentKey: keyStore.apiKey(for: provider)) { newValue in
+                    keyStore.setAPIKey(newValue, for: provider)
+                }
+            }
         }
         .confirmationDialog("Clear All Data", isPresented: $showClearConfirm, titleVisibility: .visible) {
             Button("Clear Everything", role: .destructive) {
