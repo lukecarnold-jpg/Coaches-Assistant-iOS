@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Basketball_Rotation
+@testable import Coaches_Assistant
 
 /// Ports `PlayingTimeTests`' three scenarios onto `Fixture`, guarding the
 /// duplicated `minutesPlayedSeconds()` algorithm, plus sin-bin/send-off

@@ -1,13 +1,13 @@
 //
-//  Basketball_RotationUITestsLaunchTests.swift
-//  Basketball RotationUITests
+//  CoachesAssistantUITestsLaunchTests.swift
+//  Coaches AssistantUITests
 //
 //  Created by Luke Arnold on 20/8/2026.
 //
 
 import XCTest
 
-final class Basketball_RotationUITestsLaunchTests: XCTestCase {
+final class CoachesAssistantUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true

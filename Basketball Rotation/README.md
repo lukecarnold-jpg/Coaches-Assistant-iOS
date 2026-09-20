@@ -1,4 +1,4 @@
-# Basketball Rotation (iOS)
+# Coaches Assistant (iOS)
 
 A native iOS and iPadOS application designed for youth and amateur basketball coaches to manage team rosters, orchestrate balanced player substitutions, track live game clocks and playing time, log game events and scores, and generate AI-powered practice drills.
 
@@ -52,10 +52,10 @@ Built with **Swift 6**, **SwiftUI**, **SwiftData**, and **Swift Testing**.
 ## Project Structure
 
 ```
-Basketball Rotation/
-├── Basketball Rotation.xcodeproj/           # Xcode project configuration
-├── Basketball Rotation/                     # Application source code
-│   ├── Basketball_RotationApp.swift         # App entry point, SwiftData ModelContainer & theme setup
+Coaches Assistant/
+├── Coaches Assistant.xcodeproj/           # Xcode project configuration
+├── Coaches Assistant/                     # Application source code
+│   ├── CoachesAssistantApp.swift         # App entry point, SwiftData ModelContainer & theme setup
 │   ├── ContentView.swift                    # Root adaptive layout (TabView / NavigationSplitView)
 │   ├── Assets.xcassets/                     # App icons and color sets
 │   │
@@ -96,16 +96,16 @@ Basketball Rotation/
 │       └── Training/                        # AI coaching assistant
 │           └── TrainingView.swift           # Age group drill generator and upcoming module previews
 │
-├── Basketball RotationTests/                # Swift Testing unit test suite
-│   ├── Basketball_RotationTests.swift       # Test suite entry
+├── Coaches AssistantTests/                # Swift Testing unit test suite
+│   ├── CoachesAssistantTests.swift       # Test suite entry
 │   ├── DrillGenerationTests.swift           # Output parsing and line wrapping tests for LLM responses
 │   ├── GameClockTests.swift                 # Clock math, clamping, and period label tests
 │   ├── PlayingTimeTests.swift               # Substitution interval playing time calculation tests
 │   └── RosterCSVTests.swift                 # CSV parsing, column discovery, and escaping tests
 │
-└── Basketball RotationUITests/              # XCUI automation and launch performance tests
-    ├── Basketball_RotationUITests.swift
-    └── Basketball_RotationUITestsLaunchTests.swift
+└── Coaches AssistantUITests/              # XCUI automation and launch performance tests
+    ├── CoachesAssistantUITests.swift
+    └── CoachesAssistantUITestsLaunchTests.swift
 ```
 
 ---
@@ -168,17 +168,17 @@ flowchart TD
 ### Building and Running
 1. Clone the repository:
    ```bash
-   git clone https://github.com/lukecarnold-jpg/Basketball-Rotation-iOS.git
-   cd "Basketball-Rotation-iOS/Basketball Rotation"
+   git clone https://github.com/lukecarnold-jpg/Coaches-Assistant-iOS.git
+   cd "Coaches-Assistant-iOS/Coaches Assistant"
    ```
-2. Open `Basketball Rotation.xcodeproj` in Xcode.
+2. Open `Coaches Assistant.xcodeproj` in Xcode.
 3. Select an iOS Simulator (e.g., iPhone 16 Pro or iPad Pro) or a connected physical device.
 4. Press `Cmd + R` to build and run the application.
 
 ### Running Tests
 Run the full test suite using `Cmd + U` in Xcode or via the command line:
 ```bash
-xcodebuild test -project "Basketball Rotation.xcodeproj" -scheme "Basketball Rotation" -destination "platform=iOS Simulator,name=iPhone 16 Pro"
+xcodebuild test -project "Coaches Assistant.xcodeproj" -scheme "Coaches Assistant" -destination "platform=iOS Simulator,name=iPhone 16 Pro"
 ```
 
 ---

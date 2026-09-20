@@ -1,14 +1,14 @@
 //
-//  Basketball_RotationTests.swift
-//  Basketball RotationTests
+//  CoachesAssistantTests.swift
+//  Coaches AssistantTests
 //
 //  Created by Luke Arnold on 20/8/2026.
 //
 
 import Testing
-@testable import Basketball_Rotation
+@testable import Coaches_Assistant
 
-struct Basketball_RotationTests {
+struct CoachesAssistantTests {
 
     @Test func example() async throws {
         // Write your test here and use APIs like `#expect(...)` to check expected conditions.

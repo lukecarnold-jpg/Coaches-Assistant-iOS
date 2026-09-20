@@ -1,13 +1,13 @@
 //
-//  Basketball_RotationUITests.swift
-//  Basketball RotationUITests
+//  CoachesAssistantUITests.swift
+//  Coaches AssistantUITests
 //
 //  Created by Luke Arnold on 20/8/2026.
 //
 
 import XCTest
 
-final class Basketball_RotationUITests: XCTestCase {
+final class CoachesAssistantUITests: XCTestCase {
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.

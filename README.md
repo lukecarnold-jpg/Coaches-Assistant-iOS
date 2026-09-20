@@ -1,6 +1,6 @@
-# Basketball Rotation iOS
+# Coaches Assistant iOS
 
-Basketball Rotation iOS mirrors the core Basketball-Rotation app experience for iPhone and iPad with local-first roster, game, and training workflows.
+Coaches Assistant iOS mirrors the core Coaches-Assistant app experience for iPhone and iPad with local-first roster, game, and training workflows.
 
 ## Features
 

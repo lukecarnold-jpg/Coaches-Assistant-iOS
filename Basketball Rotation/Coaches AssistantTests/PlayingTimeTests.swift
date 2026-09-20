@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Basketball_Rotation
+@testable import Coaches_Assistant
 
 struct PlayingTimeTests {
     /// Builds a game and appends a substitution/game-state event without needing a

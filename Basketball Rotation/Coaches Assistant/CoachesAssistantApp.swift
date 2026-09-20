@@ -9,7 +9,7 @@ enum StoreRecoveryStatus {
 }
 
 @main
-struct Basketball_RotationApp: App {
+struct CoachesAssistantApp: App {
     @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
 
     var sharedModelContainer: ModelContainer = {

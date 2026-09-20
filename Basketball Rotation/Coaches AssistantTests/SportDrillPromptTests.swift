@@ -1,5 +1,5 @@
 import Testing
-@testable import Basketball_Rotation
+@testable import Coaches_Assistant
 
 /// Guards the additive `sport` parameter on `drillPrompt`/`DrillGenerating` —
 /// Basketball's prompt (produced by the `.basketball` default) must stay

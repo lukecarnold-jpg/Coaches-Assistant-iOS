@@ -1,6 +1,6 @@
 import Testing
 import UIKit
-@testable import Basketball_Rotation
+@testable import Coaches_Assistant
 
 /// Guards against inventing SF Symbol names that don't exist on this SDK —
 /// `figure.netball`, for example, does not exist and must never be used.

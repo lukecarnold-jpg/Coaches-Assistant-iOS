@@ -1,6 +1,6 @@
 # Development History & Engineering Log
 
-This document records the architectural decisions, technical iterations, engineering challenges, and implementation milestones of the **Basketball Rotation** iOS project.
+This document records the architectural decisions, technical iterations, engineering challenges, and implementation milestones of the **Coaches Assistant** iOS project.
 
 ---
 
@@ -16,7 +16,7 @@ This document records the architectural decisions, technical iterations, enginee
 - **Engineering Challenges & Workarounds**:
   - *Array of UUIDs Persistence*: SwiftData historically encounters serialization bugs when persisting native `[UUID]` arrays. Resolved by storing lineup identifiers (`startingLineupIDs` and `onCourtPlayerIDs`) as `[String]` (UUID strings) and mapping to `UUID` during lookups.
   - *Custom Enum Persistence*: Custom `Codable` Swift enums inside `@Model` classes can fail during schema migrations across OS updates. Resolved by storing raw `String` values on `GameEvent.eventType` and providing a computed non-persisted property `eventKind: GameEventType`.
-  - *Schema Incompatibility Fallback*: In `Basketball_RotationApp.swift`, implemented an automated fallback catch block that wipes corrupted/stale `.sqlite-wal` / `.sqlite-shm` files during development schema iterations, preventing unrecoverable launch crashes.
+  - *Schema Incompatibility Fallback*: In `CoachesAssistantApp.swift`, implemented an automated fallback catch block that wipes corrupted/stale `.sqlite-wal` / `.sqlite-shm` files during development schema iterations, preventing unrecoverable launch crashes.
 
 ---
 
@@ -113,7 +113,7 @@ This document records the architectural decisions, technical iterations, enginee
   - `GameClockTests`: 5 test cases testing clamp math, quarter/half overtime label formatting, stopped vs running elapsed time calculations.
   - `PlayingTimeTests`: 3 test cases asserting complex multi-period substitution intervals, live clock accumulation, and game-end interval closures.
   - `RosterCSVTests`: 7 test cases validating column discovery, quote escaping, malformed rows, and header variations.
-  - `Basketball_RotationUITests`: UI test cases verifying launch performance and UI element existence.
+  - `CoachesAssistantUITests`: UI test cases verifying launch performance and UI element existence.
 
 ---
 

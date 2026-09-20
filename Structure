@@ -1,7 +1,7 @@
-Basketball Rotation/
-├── Basketball Rotation.xcodeproj/
-├── Basketball Rotation/
-│   ├── Basketball_RotationApp.swift        (app entry point, SwiftData model container setup)
+Coaches Assistant/
+├── Coaches Assistant.xcodeproj/
+├── Coaches Assistant/
+│   ├── CoachesAssistantApp.swift        (app entry point, SwiftData model container setup)
 │   ├── ContentView.swift                   (root navigation: tab view on iPhone, split view on iPad)
 │   ├── Models/
 │   │   ├── Player.swift
@@ -28,8 +28,8 @@ Basketball Rotation/
 │       ├── AccentColor.colorset/
 │       ├── AppIcon.appiconset/
 │       └── Contents.json
-├── Basketball RotationTests/
-│   └── Basketball_RotationTests.swift
-└── Basketball RotationUITests/
-    ├── Basketball_RotationUITests.swift
-    └── Basketball_RotationUITestsLaunchTests.swift
+├── Coaches AssistantTests/
+│   └── CoachesAssistantTests.swift
+└── Coaches AssistantUITests/
+    ├── CoachesAssistantUITests.swift
+    └── CoachesAssistantUITestsLaunchTests.swift

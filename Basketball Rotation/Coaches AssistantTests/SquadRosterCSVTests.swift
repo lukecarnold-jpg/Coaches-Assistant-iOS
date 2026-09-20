@@ -1,5 +1,5 @@
 import Testing
-@testable import Basketball_Rotation
+@testable import Coaches_Assistant
 
 /// Covers the additive Position column on `RosterCSV` used by the new sports'
 /// roster import/export. Basketball's own CSVs never carry this column —

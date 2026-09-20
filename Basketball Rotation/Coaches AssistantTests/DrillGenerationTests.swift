@@ -1,5 +1,5 @@
 import Testing
-@testable import Basketball_Rotation
+@testable import Coaches_Assistant
 
 struct DrillGenerationTests {
     @Test func parsesNumberedListIntoIndividualDrills() {

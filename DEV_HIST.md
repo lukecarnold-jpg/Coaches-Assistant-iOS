@@ -1,6 +1,6 @@
 # Development History
 
-`Basketball-Rotation-iOS` is the iPhone and iPad Swift companion to the Basketball Rotation app. It was developed as a local-first coaching tool for managing rosters, tracking live games, and supporting day-to-day team operations without requiring a backend service.
+`Coaches-Assistant-iOS` is the iPhone and iPad Swift companion to the Coaches Assistant app. It was developed as a local-first coaching tool for managing rosters, tracking live games, and supporting day-to-day team operations without requiring a backend service.
 
 ## Project evolution
 
@@ -83,7 +83,7 @@ Further game workflow polish focused on faster, more accurate live tracking.
 - starting lineup selection ordered by jersey number
 
 ### Project restructuring
-The Xcode project was reorganized under a single `Basketball Rotation/` directory (replacing an earlier, duplicate `BasketballRotationiOS` layout), consolidating the app target, models, views, and test targets under one consistent structure.
+The Xcode project was reorganized under a single `Coaches Assistant/` directory (replacing an earlier, duplicate `BasketballRotationiOS` layout), consolidating the app target, models, views, and test targets under one consistent structure.
 
 ## Current focus
 
@@ -96,7 +96,7 @@ The current codebase suggests a product-oriented app that emphasizes:
 
 ## At a glance
 
-`Basketball-Rotation-iOS` is a local-first basketball coaching app that helps teams:
+`Coaches-Assistant-iOS` is a local-first basketball coaching app that helps teams:
 - manage players
 - track live games
 - record events and attendance

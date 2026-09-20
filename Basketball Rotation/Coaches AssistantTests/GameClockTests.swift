@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Basketball_Rotation
+@testable import Coaches_Assistant
 
 struct GameClockTests {
     @Test func remainingSecondsClampsAtZero() {
