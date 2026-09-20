@@ -1,0 +1,145 @@
+import SwiftUI
+import SwiftData
+import UniformTypeIdentifiers
+
+/// Non-Basketball equivalent of `RosterView`, scoped to one sport. Reuses
+/// `RosterCSV` and `ShareSheet` (both defined alongside Basketball's `RosterView`)
+/// unchanged — the position column is additive and Basketball's CSVs never carry it.
+struct SquadRosterView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query private var players: [SquadPlayer]
+
+    let sport: Sport
+
+    @State private var showAddPlayer = false
+    @State private var editingPlayer: SquadPlayer?
+    @State private var showImportPicker = false
+    @State private var showExportSheet = false
+    @State private var csvExportContent = ""
+    @State private var searchText = ""
+    @State private var importError: String?
+    @State private var showImportError = false
+
+    init(sport: Sport) {
+        self.sport = sport
+        let raw = sport.rawValue
+        _players = Query(filter: #Predicate<SquadPlayer> { $0.sport == raw }, sort: \SquadPlayer.name)
+    }
+
+    var filteredPlayers: [SquadPlayer] {
+        if searchText.isEmpty { return players }
+        return players.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    var body: some View {
+        Group {
+            if players.isEmpty {
+                ContentUnavailableView("No Players", systemImage: "person.slash", description: Text("Add players to your roster to get started."))
+            } else {
+                List {
+                    ForEach(filteredPlayers) { player in
+                        Button {
+                            editingPlayer = player
+                        } label: {
+                            HStack {
+                                if let num = player.jerseyNumber {
+                                    Text("#\(num)")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 36, alignment: .leading)
+                                }
+                                Text(player.name)
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                                if let position = player.preferredPosition {
+                                    Text(position.code)
+                                        .font(.caption.bold())
+                                        .foregroundStyle(sport.tint)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 2)
+                                        .background(sport.tint.opacity(0.15), in: Capsule())
+                                }
+                                Image(systemName: "chevron.right")
+                                    .foregroundStyle(.tertiary)
+                                    .font(.caption)
+                            }
+                        }
+                    }
+                    .onDelete(perform: deletePlayers)
+                }
+                .searchable(text: $searchText, prompt: "Search players")
+            }
+        }
+        .navigationTitle("Roster")
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Menu {
+                    Button { showImportPicker = true } label: {
+                        Label("Import CSV", systemImage: "square.and.arrow.down")
+                    }
+                    Button { exportCSV() } label: {
+                        Label("Export CSV", systemImage: "square.and.arrow.up")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                Button { showAddPlayer = true } label: {
+                    Image(systemName: "plus")
+                }
+            }
+        }
+        .sheet(isPresented: $showAddPlayer) {
+            SquadPlayerEditView(sport: sport, player: nil)
+        }
+        .sheet(item: $editingPlayer) { player in
+            SquadPlayerEditView(sport: sport, player: player)
+        }
+        .sheet(isPresented: $showExportSheet) {
+            ShareSheet(items: [csvExportContent])
+        }
+        .fileImporter(isPresented: $showImportPicker, allowedContentTypes: [.commaSeparatedText, .plainText]) { result in
+            handleImport(result: result)
+        }
+        .alert("Import Error", isPresented: $showImportError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(importError ?? "Unknown error")
+        }
+    }
+
+    private func deletePlayers(offsets: IndexSet) {
+        for index in offsets {
+            modelContext.delete(filteredPlayers[index])
+        }
+    }
+
+    private func exportCSV() {
+        var lines = ["Name,Jersey Number,Position"]
+        for player in players {
+            let jersey = player.jerseyNumber.map { String($0) } ?? ""
+            lines.append("\(RosterCSV.escape(player.name)),\(jersey),\(player.preferredPositionCode)")
+        }
+        csvExportContent = lines.joined(separator: "\n")
+        showExportSheet = true
+    }
+
+    private func handleImport(result: Result<URL, Error>) {
+        switch result {
+        case .success(let url):
+            guard url.startAccessingSecurityScopedResource() else { return }
+            defer { url.stopAccessingSecurityScopedResource() }
+            do {
+                let content = try String(contentsOf: url, encoding: .utf8)
+                for parsed in RosterCSV.parse(content) {
+                    modelContext.insert(SquadPlayer(sport: sport, name: parsed.name, jerseyNumber: parsed.jerseyNumber, preferredPositionCode: parsed.positionCode ?? ""))
+                }
+            } catch {
+                importError = error.localizedDescription
+                showImportError = true
+            }
+        case .failure(let error):
+            importError = error.localizedDescription
+            showImportError = true
+        }
+    }
+}

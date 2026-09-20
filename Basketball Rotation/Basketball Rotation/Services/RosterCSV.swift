@@ -6,6 +6,15 @@ enum RosterCSV {
     struct ParsedPlayer: Equatable {
         let name: String
         let jerseyNumber: Int?
+        // Only populated for the new-sport rosters, which have positions;
+        // Basketball's CSVs have no Position column and this stays nil.
+        let positionCode: String?
+
+        init(name: String, jerseyNumber: Int? = nil, positionCode: String? = nil) {
+            self.name = name
+            self.jerseyNumber = jerseyNumber
+            self.positionCode = positionCode
+        }
     }
 
     static func parse(_ content: String) -> [ParsedPlayer] {
@@ -15,6 +24,7 @@ enum RosterCSV {
         let header = lines[0].lowercased()
         let nameIndex = columnIndex(header: header, candidates: ["name", "player"]) ?? 0
         let jerseyIndex = columnIndex(header: header, candidates: ["jersey", "number", "#"])
+        let positionIndex = columnIndex(header: header, candidates: ["position", "pos"])
 
         var result: [ParsedPlayer] = []
         for line in lines.dropFirst() {
@@ -23,7 +33,8 @@ enum RosterCSV {
             let name = cols[nameIndex].trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty else { continue }
             let jerseyNum: Int? = jerseyIndex.flatMap { cols.indices.contains($0) ? Int(cols[$0].trimmingCharacters(in: .whitespacesAndNewlines)) : nil }
-            result.append(ParsedPlayer(name: name, jerseyNumber: jerseyNum))
+            let position: String? = positionIndex.flatMap { cols.indices.contains($0) ? cols[$0].trimmingCharacters(in: .whitespacesAndNewlines) : nil }
+            result.append(ParsedPlayer(name: name, jerseyNumber: jerseyNum, positionCode: (position?.isEmpty ?? true) ? nil : position))
         }
         return result
     }

@@ -21,6 +21,8 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var players: [Player]
     @Query private var games: [Game]
+    @Query private var squadPlayers: [SquadPlayer]
+    @Query private var fixtures: [Fixture]
     @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
     @AppStorage("selectedAIProvider") private var selectedProviderRaw = AIProvider.gemini.rawValue
     @State private var keyStore = AIAPIKeyStore.shared
@@ -31,6 +33,14 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            if StoreRecoveryStatus.wasReset {
+                Section {
+                    Text("Your previous data couldn't be opened after an update and was set aside rather than deleted. Contact support if you need it recovered.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
+
             Section("Appearance") {
                 Picker("Theme", selection: $appearanceMode) {
                     ForEach(AppearanceMode.allCases) { mode in
@@ -78,6 +88,18 @@ struct SettingsView: View {
                     Text("\(games.count)")
                         .foregroundStyle(.secondary)
                 }
+                HStack {
+                    Text("Other Sports — Players")
+                    Spacer()
+                    Text("\(squadPlayers.count)")
+                        .foregroundStyle(.secondary)
+                }
+                HStack {
+                    Text("Other Sports — Fixtures")
+                    Spacer()
+                    Text("\(fixtures.count)")
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section {
@@ -91,7 +113,7 @@ struct SettingsView: View {
                     }
                 }
             } footer: {
-                Text("This permanently removes all players, games, events, and notes from this device.")
+                Text("This permanently removes all players, games, events, and notes for every sport from this device.")
             }
 
             Section("About") {
@@ -142,6 +164,14 @@ struct SettingsView: View {
             try modelContext.delete(model: GameAttendance.self)
             try modelContext.delete(model: Game.self)
             try modelContext.delete(model: Player.self)
+            // FixtureLineupSlot before Fixture: both cascade-delete from Fixture,
+            // but deleting explicitly in dependency order avoids relying on the
+            // cascade rule alone when clearing every entity at once.
+            try modelContext.delete(model: FixtureLineupSlot.self)
+            try modelContext.delete(model: FixtureEvent.self)
+            try modelContext.delete(model: FixtureAttendance.self)
+            try modelContext.delete(model: Fixture.self)
+            try modelContext.delete(model: SquadPlayer.self)
             showClearSuccess = true
         } catch {
             print("Failed to clear data: \(error)")

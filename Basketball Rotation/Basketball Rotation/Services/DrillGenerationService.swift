@@ -15,7 +15,16 @@ enum DrillGenerationError: LocalizedError {
 }
 
 protocol DrillGenerating {
-    func generateDrills(ageGroup: String, apiKey: String) async throws -> [String]
+    func generateDrills(ageGroup: String, apiKey: String, sport: Sport) async throws -> [String]
+}
+
+extension DrillGenerating {
+    /// Basketball's call site (`TrainingView`) omits `sport` entirely — this
+    /// default keeps that call byte-identical rather than requiring an edit
+    /// there just to satisfy a parameter it doesn't care about.
+    func generateDrills(ageGroup: String, apiKey: String) async throws -> [String] {
+        try await generateDrills(ageGroup: ageGroup, apiKey: apiKey, sport: .basketball)
+    }
 }
 
 extension AIProvider {
@@ -29,8 +38,8 @@ extension AIProvider {
     }
 }
 
-private func drillPrompt(ageGroup: String) -> String {
-    "Generate 5 basketball practice drills suitable for \(ageGroup) players. For each drill, provide a short name followed by a 1-2 sentence description. Format as a numbered list with just the drill name and description, no extra headers."
+func drillPrompt(ageGroup: String, sport: Sport) -> String {
+    "Generate 5 \(sport.rules.drillNoun) practice drills suitable for \(ageGroup) players. For each drill, provide a short name followed by a 1-2 sentence description. Format as a numbered list with just the drill name and description, no extra headers."
 }
 
 /// Numbered-list parsing shared by every provider — the request/response plumbing
@@ -71,12 +80,12 @@ private func apiErrorMessage(from data: Data) -> String {
 // MARK: - Gemini
 
 struct GeminiDrillService: DrillGenerating {
-    func generateDrills(ageGroup: String, apiKey: String) async throws -> [String] {
+    func generateDrills(ageGroup: String, apiKey: String, sport: Sport) async throws -> [String] {
         let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=\(apiKey)")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let body: [String: Any] = ["contents": [["parts": [["text": drillPrompt(ageGroup: ageGroup)]]]]]
+        let body: [String: Any] = ["contents": [["parts": [["text": drillPrompt(ageGroup: ageGroup, sport: sport)]]]]]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -100,7 +109,7 @@ struct ClaudeDrillService: DrillGenerating {
     /// Haiku 4.5 — current fast/cheap tier, plenty for a short templated drill list.
     private let model = "claude-haiku-4-5-20251001"
 
-    func generateDrills(ageGroup: String, apiKey: String) async throws -> [String] {
+    func generateDrills(ageGroup: String, apiKey: String, sport: Sport) async throws -> [String] {
         let url = URL(string: "https://api.anthropic.com/v1/messages")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -110,7 +119,7 @@ struct ClaudeDrillService: DrillGenerating {
         let body: [String: Any] = [
             "model": model,
             "max_tokens": 1024,
-            "messages": [["role": "user", "content": drillPrompt(ageGroup: ageGroup)]]
+            "messages": [["role": "user", "content": drillPrompt(ageGroup: ageGroup, sport: sport)]]
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -133,13 +142,13 @@ struct OpenAIDrillService: DrillGenerating {
     /// GPT-5.6 Luna — current cheapest/fastest tier via the Responses API.
     private let model = "gpt-5.6-luna"
 
-    func generateDrills(ageGroup: String, apiKey: String) async throws -> [String] {
+    func generateDrills(ageGroup: String, apiKey: String, sport: Sport) async throws -> [String] {
         let url = URL(string: "https://api.openai.com/v1/responses")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let body: [String: Any] = ["model": model, "input": drillPrompt(ageGroup: ageGroup)]
+        let body: [String: Any] = ["model": model, "input": drillPrompt(ageGroup: ageGroup, sport: sport)]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -164,7 +173,7 @@ struct CustomDrillService: DrillGenerating {
     let baseURL: String
     let model: String
 
-    func generateDrills(ageGroup: String, apiKey: String) async throws -> [String] {
+    func generateDrills(ageGroup: String, apiKey: String, sport: Sport) async throws -> [String] {
         let trimmedBase = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedBase.isEmpty, !trimmedModel.isEmpty else {
@@ -183,7 +192,7 @@ struct CustomDrillService: DrillGenerating {
         }
         let body: [String: Any] = [
             "model": trimmedModel,
-            "messages": [["role": "user", "content": drillPrompt(ageGroup: ageGroup)]]
+            "messages": [["role": "user", "content": drillPrompt(ageGroup: ageGroup, sport: sport)]]
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 

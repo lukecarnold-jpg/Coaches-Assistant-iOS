@@ -1,0 +1,74 @@
+import SwiftUI
+
+/// The non-Basketball equivalent of `ContentView` — same TabView/NavigationSplitView
+/// shape, scoped to one sport via `init(sport:)` so each tab's `@Query` predicate
+/// can be built correctly. `SettingsView` is reused directly since it's app-level
+/// (AI provider, appearance), not sport-scoped.
+struct SportHomeView: View {
+    let sport: Sport
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    var body: some View {
+        Group {
+            if sizeClass == .compact {
+                TabView {
+                    NavigationStack { SquadRosterView(sport: sport) }
+                        .tabItem { Label("Roster", systemImage: "person.3.fill") }
+
+                    NavigationStack { FixtureListView(sport: sport) }
+                        .tabItem { Label("Fixtures", systemImage: "sportscourt.fill") }
+
+                    NavigationStack { SportTrainingView(sport: sport) }
+                        .tabItem { Label("Training", systemImage: "figure.run") }
+
+                    NavigationStack { SettingsView() }
+                        .tabItem { Label("Settings", systemImage: "gear") }
+                }
+            } else {
+                SportSidebarNavigationView(sport: sport)
+            }
+        }
+        .environment(\.sport, sport)
+    }
+}
+
+private struct SportSidebarNavigationView: View {
+    let sport: Sport
+    @State private var selectedTab: SportTab? = .roster
+
+    enum SportTab: String, CaseIterable, Hashable {
+        case roster    = "Roster"
+        case fixtures  = "Fixtures"
+        case training  = "Training"
+        case settings  = "Settings"
+
+        var systemImage: String {
+            switch self {
+            case .roster:   return "person.3.fill"
+            case .fixtures: return "sportscourt.fill"
+            case .training: return "figure.run"
+            case .settings: return "gear"
+            }
+        }
+    }
+
+    var body: some View {
+        NavigationSplitView {
+            List(SportTab.allCases, id: \.self, selection: $selectedTab) { tab in
+                Label(tab.rawValue, systemImage: tab.systemImage)
+                    .tag(tab)
+            }
+            .navigationTitle(sport.rules.displayName)
+        } detail: {
+            NavigationStack {
+                switch selectedTab {
+                case .roster:   SquadRosterView(sport: sport)
+                case .fixtures: FixtureListView(sport: sport)
+                case .training: SportTrainingView(sport: sport)
+                case .settings: SettingsView()
+                case nil:       SquadRosterView(sport: sport)
+                }
+            }
+        }
+    }
+}
