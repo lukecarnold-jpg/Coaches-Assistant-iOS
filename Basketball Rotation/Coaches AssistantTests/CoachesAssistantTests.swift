@@ -1,19 +1,22 @@
-//
-//  CoachesAssistantTests.swift
-//  Coaches AssistantTests
-//
-//  Created by Luke Arnold on 20/8/2026.
-//
-
 import Testing
 @testable import Coaches_Assistant
 
 struct CoachesAssistantTests {
 
-    @Test func example() async throws {
-        // Write your test here and use APIs like `#expect(...)` to check expected conditions.
-        // Swift Testing Documentation
-        // https://developer.apple.com/documentation/testing
+    @Test func deletionTargetAllCasesCoversAllSports() {
+        let cases = DeletionTarget.allCases
+        #expect(cases.contains(.basketballPlayers))
+        #expect(cases.contains(.basketballGames))
+        for sport in Sport.allCases where sport != .basketball {
+            #expect(cases.contains(.squadPlayers(sport)))
+            #expect(cases.contains(.fixtures(sport)))
+        }
+        #expect(cases.count == 2 + 2 * (Sport.allCases.count - 1))
     }
 
+    @Test func deletionTargetIDsAreUnique() {
+        let cases = DeletionTarget.allCases
+        let ids = Set(cases.map(\.id))
+        #expect(ids.count == cases.count)
+    }
 }

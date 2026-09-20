@@ -27,8 +27,8 @@ struct SettingsView: View {
     @AppStorage("selectedAIProvider") private var selectedProviderRaw = AIProvider.gemini.rawValue
     @State private var keyStore = AIAPIKeyStore.shared
 
-    @State private var showClearConfirm = false
-    @State private var showClearSuccess = false
+    @State private var showDeleteSheet = false
+    @State private var showDeleteSuccess = false
     @State private var editingProvider: AIProvider?
 
     var body: some View {
@@ -104,16 +104,16 @@ struct SettingsView: View {
 
             Section {
                 Button(role: .destructive) {
-                    showClearConfirm = true
+                    showDeleteSheet = true
                 } label: {
                     HStack {
                         Spacer()
-                        Text("Clear All Data")
+                        Text("Delete Data…")
                         Spacer()
                     }
                 }
             } footer: {
-                Text("This permanently removes all players, games, events, and notes for every sport from this device.")
+                Text("Selectively delete players, squads, games, fixtures, and events, or remove all data from this device.")
             }
 
             Section("About") {
@@ -143,38 +143,15 @@ struct SettingsView: View {
                 }
             }
         }
-        .confirmationDialog("Clear All Data", isPresented: $showClearConfirm, titleVisibility: .visible) {
-            Button("Clear Everything", role: .destructive) {
-                clearAllData()
+        .sheet(isPresented: $showDeleteSheet) {
+            DataDeletionSheet {
+                showDeleteSuccess = true
             }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This cannot be undone. All players, games, and history will be deleted.")
         }
-        .alert("Data Cleared", isPresented: $showClearSuccess) {
+        .alert("Data Deleted", isPresented: $showDeleteSuccess) {
             Button("OK") {}
         } message: {
-            Text("All data has been removed from this device.")
-        }
-    }
-
-    private func clearAllData() {
-        do {
-            try modelContext.delete(model: GameEvent.self)
-            try modelContext.delete(model: GameAttendance.self)
-            try modelContext.delete(model: Game.self)
-            try modelContext.delete(model: Player.self)
-            // FixtureLineupSlot before Fixture: both cascade-delete from Fixture,
-            // but deleting explicitly in dependency order avoids relying on the
-            // cascade rule alone when clearing every entity at once.
-            try modelContext.delete(model: FixtureLineupSlot.self)
-            try modelContext.delete(model: FixtureEvent.self)
-            try modelContext.delete(model: FixtureAttendance.self)
-            try modelContext.delete(model: Fixture.self)
-            try modelContext.delete(model: SquadPlayer.self)
-            showClearSuccess = true
-        } catch {
-            print("Failed to clear data: \(error)")
+            Text("The selected data has been removed from this device.")
         }
     }
 }
