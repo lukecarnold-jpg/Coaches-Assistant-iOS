@@ -2,7 +2,7 @@ import Foundation
 
 /// One of the sports the app can track. Basketball's own models/views never read
 /// this type — it exists only to drive Basketball's landing tile and the shared
-/// drill prompt. Everything else here backs the five new sports.
+/// drill prompt. Everything else here backs the non-Basketball sports.
 enum Sport: String, CaseIterable, Identifiable, Hashable, Codable {
     case basketball
     case netball
@@ -10,10 +10,19 @@ enum Sport: String, CaseIterable, Identifiable, Hashable, Codable {
     case afl
     case rugbyUnion
     case rugbyLeague
+    case iceHockey
+    case fieldHockey
+    case teamHandball
+    case waterPolo
+    case lacrosse
+    case flagFootball
+    case futsal
+    case volleyball
+    case touchFootball
 
     var id: String { rawValue }
 
-    /// All sports except Basketball — the six landing tiles show `allCases`,
+    /// All sports except Basketball — the landing tiles show `allCases`,
     /// but the parallel Squad/Fixture roster & game screens only ever query
     /// for these, since Basketball keeps its own separate Player/Game models.
     static var supported: [Sport] { allCases }
@@ -187,6 +196,254 @@ enum Sport: String, CaseIterable, Identifiable, Hashable, Codable {
                     Position(code: "CTR", name: "Centre"),
                     Position(code: "WNG", name: "Wing"),
                     Position(code: "FB", name: "Fullback"),
+                ]
+            )
+        case .iceHockey:
+            return SportRules(
+                displayName: "Ice Hockey",
+                systemImage: "figure.hockey",
+                onFieldCount: 6,
+                periodFormat: "quarters",
+                periodCount: 4,
+                defaultPeriodMinutes: 15,
+                maxPeriodMinutes: 25,
+                onFieldTerm: "On Ice",
+                drillNoun: "ice hockey",
+                scoringActions: [
+                    ScoringAction(code: "goal", label: "Goal", points: 1),
+                ],
+                disciplineActions: [
+                    DisciplineAction(code: "minorPenalty", label: "Minor Penalty (2 min)", systemImage: "timer", removal: .temporary(seconds: 120)),
+                    DisciplineAction(code: "majorPenalty", label: "Major Penalty (5 min)", systemImage: "timer", removal: .temporary(seconds: 300)),
+                    DisciplineAction(code: "misconduct", label: "Misconduct", systemImage: "rectangle.portrait.fill", removal: .permanent),
+                ],
+                positions: [
+                    Position(code: "G", name: "Goalie"),
+                    Position(code: "LD", name: "Left Defense"),
+                    Position(code: "RD", name: "Right Defense"),
+                    Position(code: "LW", name: "Left Wing"),
+                    Position(code: "C", name: "Center"),
+                    Position(code: "RW", name: "Right Wing"),
+                ]
+            )
+        case .fieldHockey:
+            return SportRules(
+                displayName: "Field Hockey",
+                systemImage: "figure.field.hockey",
+                onFieldCount: 11,
+                periodFormat: "quarters",
+                periodCount: 4,
+                defaultPeriodMinutes: 15,
+                maxPeriodMinutes: 25,
+                onFieldTerm: "On Field",
+                drillNoun: "field hockey",
+                scoringActions: [
+                    ScoringAction(code: "goal", label: "Goal", points: 1),
+                ],
+                disciplineActions: [
+                    DisciplineAction(code: "greenCard", label: "Green Card (2 min)", systemImage: "rectangle.portrait.fill", removal: .temporary(seconds: 120)),
+                    DisciplineAction(code: "yellowCard", label: "Yellow Card (5 min)", systemImage: "rectangle.portrait.fill", removal: .temporary(seconds: 300)),
+                    DisciplineAction(code: "redCard", label: "Red Card", systemImage: "rectangle.portrait.fill", removal: .permanent),
+                ],
+                positions: [
+                    Position(code: "GK", name: "Goalkeeper"),
+                    Position(code: "DEF", name: "Defender"),
+                    Position(code: "MID", name: "Midfielder"),
+                    Position(code: "FWD", name: "Forward"),
+                ]
+            )
+        case .teamHandball:
+            return SportRules(
+                displayName: "Handball",
+                systemImage: "figure.handball",
+                onFieldCount: 7,
+                periodFormat: "halves",
+                periodCount: 2,
+                defaultPeriodMinutes: 30,
+                maxPeriodMinutes: 30,
+                onFieldTerm: "On Court",
+                drillNoun: "team handball",
+                scoringActions: [
+                    ScoringAction(code: "goal", label: "Goal", points: 1),
+                ],
+                disciplineActions: [
+                    DisciplineAction(code: "yellowCard", label: "Yellow Card", systemImage: "rectangle.portrait.fill", removal: .none),
+                    DisciplineAction(code: "twoMinuteSuspension", label: "2-Min Suspension", systemImage: "timer", removal: .temporary(seconds: 120)),
+                    DisciplineAction(code: "redCard", label: "Red Card", systemImage: "rectangle.portrait.fill", removal: .permanent),
+                ],
+                positions: [
+                    Position(code: "GK", name: "Goalkeeper"),
+                    Position(code: "LW", name: "Left Wing"),
+                    Position(code: "LB", name: "Left Back"),
+                    Position(code: "CB", name: "Centre Back"),
+                    Position(code: "RB", name: "Right Back"),
+                    Position(code: "RW", name: "Right Wing"),
+                    Position(code: "PVT", name: "Pivot"),
+                ]
+            )
+        case .waterPolo:
+            return SportRules(
+                displayName: "Water Polo",
+                systemImage: "figure.waterpolo",
+                onFieldCount: 7,
+                periodFormat: "quarters",
+                periodCount: 4,
+                defaultPeriodMinutes: 8,
+                maxPeriodMinutes: 15,
+                onFieldTerm: "In Pool",
+                drillNoun: "water polo",
+                scoringActions: [
+                    ScoringAction(code: "goal", label: "Goal", points: 1),
+                ],
+                disciplineActions: [
+                    DisciplineAction(code: "exclusion", label: "Exclusion (20s)", systemImage: "timer", removal: .temporary(seconds: 20)),
+                    DisciplineAction(code: "majorFoul", label: "Brutality / Red Card", systemImage: "rectangle.portrait.fill", removal: .permanent),
+                ],
+                positions: [
+                    Position(code: "GK", name: "Goalkeeper"),
+                    Position(code: "CF", name: "Center Forward"),
+                    Position(code: "CB", name: "Center Back"),
+                    Position(code: "WNG", name: "Wing"),
+                    Position(code: "DRV", name: "Driver"),
+                    Position(code: "UTL", name: "Utility"),
+                ]
+            )
+        case .lacrosse:
+            return SportRules(
+                displayName: "Lacrosse",
+                systemImage: "figure.lacrosse",
+                onFieldCount: 10,
+                periodFormat: "quarters",
+                periodCount: 4,
+                defaultPeriodMinutes: 15,
+                maxPeriodMinutes: 20,
+                onFieldTerm: "On Field",
+                drillNoun: "lacrosse",
+                scoringActions: [
+                    ScoringAction(code: "goal", label: "Goal", points: 1),
+                    ScoringAction(code: "twoPointGoal", label: "2-Point Goal", points: 2),
+                ],
+                disciplineActions: [
+                    DisciplineAction(code: "technicalFoul", label: "Technical Foul (30s)", systemImage: "timer", removal: .temporary(seconds: 30)),
+                    DisciplineAction(code: "personalFoul", label: "Personal Foul (1 min)", systemImage: "timer", removal: .temporary(seconds: 60)),
+                    DisciplineAction(code: "expulsion", label: "Expulsion", systemImage: "rectangle.portrait.fill", removal: .permanent),
+                ],
+                positions: [
+                    Position(code: "G", name: "Goalie"),
+                    Position(code: "DEF", name: "Close Defense"),
+                    Position(code: "LSM", name: "Long Stick Midfield"),
+                    Position(code: "MID", name: "Midfield"),
+                    Position(code: "FOGO", name: "Face-off Specialist"),
+                    Position(code: "ATT", name: "Attack"),
+                ]
+            )
+        case .flagFootball:
+            return SportRules(
+                displayName: "Flag Football",
+                systemImage: "figure.american.football",
+                onFieldCount: 5,
+                periodFormat: "halves",
+                periodCount: 2,
+                defaultPeriodMinutes: 20,
+                maxPeriodMinutes: 30,
+                onFieldTerm: "On Field",
+                drillNoun: "flag football",
+                scoringActions: [
+                    ScoringAction(code: "touchdown", label: "Touchdown", points: 6),
+                    ScoringAction(code: "extraPoint1", label: "1-Pt Conversion", points: 1),
+                    ScoringAction(code: "extraPoint2", label: "2-Pt Conversion", points: 2),
+                    ScoringAction(code: "safety", label: "Safety", points: 2),
+                ],
+                disciplineActions: [
+                    DisciplineAction(code: "penalty", label: "Penalty", systemImage: "flag", removal: .none),
+                    DisciplineAction(code: "unsportsmanlike", label: "Unsportsmanlike Conduct", systemImage: "flag.fill", removal: .none),
+                ],
+                positions: [
+                    Position(code: "QB", name: "Quarterback"),
+                    Position(code: "C", name: "Center"),
+                    Position(code: "WR", name: "Wide Receiver"),
+                    Position(code: "RB", name: "Running Back"),
+                    Position(code: "RUSH", name: "Pass Rusher"),
+                    Position(code: "DB", name: "Defensive Back"),
+                    Position(code: "SAF", name: "Safety"),
+                ]
+            )
+        case .futsal:
+            return SportRules(
+                displayName: "Futsal",
+                systemImage: "figure.indoor.soccer",
+                onFieldCount: 5,
+                periodFormat: "halves",
+                periodCount: 2,
+                defaultPeriodMinutes: 20,
+                maxPeriodMinutes: 25,
+                onFieldTerm: "On Court",
+                drillNoun: "futsal",
+                scoringActions: [
+                    ScoringAction(code: "goal", label: "Goal", points: 1),
+                ],
+                disciplineActions: [
+                    DisciplineAction(code: "yellowCard", label: "Yellow Card", systemImage: "rectangle.portrait.fill", removal: .none),
+                    DisciplineAction(code: "redCard", label: "Red Card (2 min)", systemImage: "rectangle.portrait.fill", removal: .temporary(seconds: 120)),
+                ],
+                positions: [
+                    Position(code: "GK", name: "Goalkeeper"),
+                    Position(code: "FIX", name: "Defender (Fixo)"),
+                    Position(code: "ALA", name: "Winger (Ala)"),
+                    Position(code: "PIV", name: "Pivot (Pivô)"),
+                ]
+            )
+        case .volleyball:
+            return SportRules(
+                displayName: "Volleyball",
+                systemImage: "figure.volleyball",
+                onFieldCount: 6,
+                periodFormat: "halves",
+                periodCount: 2,
+                defaultPeriodMinutes: 25,
+                maxPeriodMinutes: 35,
+                onFieldTerm: "On Court",
+                drillNoun: "volleyball",
+                scoringActions: [
+                    ScoringAction(code: "point", label: "Point", points: 1),
+                ],
+                disciplineActions: [
+                    DisciplineAction(code: "yellowCard", label: "Yellow Card (Warning)", systemImage: "rectangle.portrait.fill", removal: .none),
+                    DisciplineAction(code: "redCard", label: "Red Card (Penalty Point)", systemImage: "rectangle.portrait.fill", removal: .none),
+                    DisciplineAction(code: "expulsion", label: "Expulsion", systemImage: "rectangle.portrait.fill", removal: .permanent),
+                ],
+                positions: [
+                    Position(code: "S", name: "Setter"),
+                    Position(code: "OH", name: "Outside Hitter"),
+                    Position(code: "MB", name: "Middle Blocker"),
+                    Position(code: "OPP", name: "Opposite Hitter"),
+                    Position(code: "L", name: "Libero"),
+                    Position(code: "DS", name: "Defensive Specialist"),
+                ]
+            )
+        case .touchFootball:
+            return SportRules(
+                displayName: "Touch Football",
+                systemImage: "figure.rugby",
+                onFieldCount: 6,
+                periodFormat: "halves",
+                periodCount: 2,
+                defaultPeriodMinutes: 20,
+                maxPeriodMinutes: 25,
+                onFieldTerm: "On Field",
+                drillNoun: "touch football",
+                scoringActions: [
+                    ScoringAction(code: "touchdown", label: "Touchdown", points: 1),
+                ],
+                disciplineActions: [
+                    DisciplineAction(code: "penalty", label: "Penalty Conceded", systemImage: "flag", removal: .none),
+                    DisciplineAction(code: "sinBin", label: "Sin Bin (4 min)", systemImage: "timer", removal: .temporary(seconds: 240)),
+                    DisciplineAction(code: "sendOff", label: "Sent Off", systemImage: "rectangle.portrait.fill", removal: .permanent),
+                ],
+                positions: [
+                    Position(code: "MID", name: "Middle"),
+                    Position(code: "LNK", name: "Link"),
+                    Position(code: "WNG", name: "Wing"),
                 ]
             )
         }
