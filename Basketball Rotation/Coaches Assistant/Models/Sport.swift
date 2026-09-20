@@ -44,7 +44,7 @@ enum Sport: String, CaseIterable, Identifiable, Hashable, Codable {
         case .netball:
             return SportRules(
                 displayName: "Netball",
-                systemImage: "figure.handball",
+                systemImage: "sportscourt",
                 onFieldCount: 7,
                 periodFormat: "quarters",
                 periodCount: 4,
