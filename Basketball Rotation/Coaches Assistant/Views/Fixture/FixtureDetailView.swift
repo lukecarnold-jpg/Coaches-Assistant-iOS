@@ -24,9 +24,6 @@ struct FixtureDetailView: View {
     @State private var showManualClock = false
     @State private var showAdvancePeriodConfirm = false
     @State private var showEndFixtureConfirm = false
-    @State private var showExportOptions = false
-    @State private var exportContent = ""
-    @State private var showShareSheet = false
     @State private var manualMinutes = ""
     @State private var manualSeconds = ""
     @State private var showTeamScoreSheet = false
@@ -86,11 +83,15 @@ struct FixtureDetailView: View {
                         Label("Playing Time", systemImage: "stopwatch")
                     }
                     Divider()
-                    Button { exportFixtureCSV() } label: {
-                        Label("Export Events CSV", systemImage: "tablecells")
+                    if let csvURL = generateFixtureCSVURL() {
+                        ShareLink(item: csvURL, preview: SharePreview(csvURL.lastPathComponent, image: Image(systemName: "tablecells"))) {
+                            Label("Export Events CSV", systemImage: "tablecells")
+                        }
                     }
-                    Button { exportNotesTXT() } label: {
-                        Label("Export Notes TXT", systemImage: "doc.text")
+                    if let txtURL = generateNotesTXTURL() {
+                        ShareLink(item: txtURL, preview: SharePreview(txtURL.lastPathComponent, image: Image(systemName: "doc.text"))) {
+                            Label("Export Notes TXT", systemImage: "doc.text")
+                        }
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -126,9 +127,6 @@ struct FixtureDetailView: View {
             ManualClockView(minutes: $manualMinutes, seconds: $manualSeconds) {
                 applyManualTime()
             }
-        }
-        .sheet(isPresented: $showShareSheet) {
-            ShareSheet(items: [exportContent])
         }
         .sheet(isPresented: $showTeamScoreSheet) {
             ScoreSheet(sport: sport, title: "Team Score", players: onFieldPlayers.isEmpty ? presentPlayers : onFieldPlayers) { player, action in
@@ -564,7 +562,7 @@ struct FixtureDetailView: View {
         fixture.periodLabel(forPeriod: fixture.currentPeriod + 1)
     }
 
-    private func exportFixtureCSV() {
+    private func generateFixtureCSVURL() -> URL? {
         var lines = ["Period,Time,Event,Player,Detail"]
         for event in fixture.events.sorted(by: { $0.timestamp < $1.timestamp }) {
             let time = formatTime(event.elapsedSeconds)
@@ -578,14 +576,20 @@ struct FixtureDetailView: View {
             lines.append("Coaching Notes")
             lines.append(fixture.notes.replacingOccurrences(of: "\n", with: " "))
         }
-        exportContent = lines.joined(separator: "\n")
-        showShareSheet = true
+        let content = lines.joined(separator: "\n")
+        let safeSport = sport.rules.displayName.replacingOccurrences(of: " ", with: "_")
+        let safeOpponent = fixture.opponentName.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "[^a-zA-Z0-9_\\-]", with: "_", options: .regularExpression)
+        let filename = safeOpponent.isEmpty ? "\(safeSport)_Events.csv" : "\(safeSport)_Events_vs_\(safeOpponent).csv"
+        return RosterCSV.createTemporaryFile(filename: filename, content: content)
     }
 
-    private func exportNotesTXT() {
+    private func generateNotesTXTURL() -> URL? {
         let header = "Fixture Notes – vs \(fixture.opponentName) – \(fixture.date.formatted(date: .long, time: .omitted))\n\n"
-        exportContent = header + (fixture.notes.isEmpty ? "No notes." : fixture.notes)
-        showShareSheet = true
+        let content = header + (fixture.notes.isEmpty ? "No notes." : fixture.notes)
+        let safeSport = sport.rules.displayName.replacingOccurrences(of: " ", with: "_")
+        let safeOpponent = fixture.opponentName.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "[^a-zA-Z0-9_\\-]", with: "_", options: .regularExpression)
+        let filename = safeOpponent.isEmpty ? "\(safeSport)_Notes.txt" : "\(safeSport)_Notes_vs_\(safeOpponent).txt"
+        return RosterCSV.createTemporaryFile(filename: filename, content: content)
     }
 
     func formatTime(_ seconds: Int) -> String {

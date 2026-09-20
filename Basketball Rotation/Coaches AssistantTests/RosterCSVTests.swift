@@ -1,4 +1,5 @@
 import Testing
+import Foundation
 @testable import Coaches_Assistant
 
 struct RosterCSVTests {
@@ -41,5 +42,22 @@ struct RosterCSVTests {
         #expect(RosterCSV.escape("Smith, Jr.") == "\"Smith, Jr.\"")
         #expect(RosterCSV.escape("Sam \"Ace\" Jones") == "\"Sam \"\"Ace\"\" Jones\"")
         #expect(RosterCSV.escape("Curry") == "Curry")
+    }
+
+    @Test func createsTemporaryFileWithCorrectContentAndExtension() throws {
+        let filename = "Test_Roster.csv"
+        let sampleContent = "Name,Jersey Number\nJordan,23"
+        guard let url = RosterCSV.createTemporaryFile(filename: filename, content: sampleContent) else {
+            Issue.record("Failed to create temporary file")
+            return
+        }
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        #expect(url.lastPathComponent == filename)
+        #expect(url.pathExtension == "csv")
+        #expect(FileManager.default.fileExists(atPath: url.path))
+
+        let readContent = try String(contentsOf: url, encoding: .utf8)
+        #expect(readContent == sampleContent)
     }
 }

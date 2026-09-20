@@ -9,8 +9,6 @@ struct RosterView: View {
     @State private var showAddPlayer = false
     @State private var editingPlayer: Player?
     @State private var showImportPicker = false
-    @State private var showExportSheet = false
-    @State private var csvExportContent = ""
     @State private var searchText = ""
     @State private var importError: String?
     @State private var showImportError = false
@@ -58,8 +56,10 @@ struct RosterView: View {
                     Button { showImportPicker = true } label: {
                         Label("Import CSV", systemImage: "square.and.arrow.down")
                     }
-                    Button { exportCSV() } label: {
-                        Label("Export CSV", systemImage: "square.and.arrow.up")
+                    if let exportURL = generateExportURL() {
+                        ShareLink(item: exportURL, preview: SharePreview("Basketball_Roster.csv", image: Image(systemName: "tablecells"))) {
+                            Label("Export CSV", systemImage: "square.and.arrow.up")
+                        }
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -74,9 +74,6 @@ struct RosterView: View {
         }
         .sheet(item: $editingPlayer) { player in
             PlayerEditView(player: player)
-        }
-        .sheet(isPresented: $showExportSheet) {
-            ShareSheet(items: [csvExportContent])
         }
         .fileImporter(isPresented: $showImportPicker, allowedContentTypes: [.commaSeparatedText, .plainText]) { result in
             handleImport(result: result)
@@ -94,14 +91,14 @@ struct RosterView: View {
         }
     }
 
-    private func exportCSV() {
+    private func generateExportURL() -> URL? {
         var lines = ["Name,Jersey Number"]
         for player in players {
             let jersey = player.jerseyNumber.map { String($0) } ?? ""
             lines.append("\(RosterCSV.escape(player.name)),\(jersey)")
         }
-        csvExportContent = lines.joined(separator: "\n")
-        showExportSheet = true
+        let content = lines.joined(separator: "\n")
+        return RosterCSV.createTemporaryFile(filename: "Basketball_Roster.csv", content: content)
     }
 
     private func handleImport(result: Result<URL, Error>) {
@@ -123,14 +120,4 @@ struct RosterView: View {
             showImportError = true
         }
     }
-}
-
-struct ShareSheet: UIViewControllerRepresentable {
-    let items: [Any]
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ uvc: UIActivityViewController, context: Context) {}
 }

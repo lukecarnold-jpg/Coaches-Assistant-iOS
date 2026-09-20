@@ -67,4 +67,16 @@ enum RosterCSV {
         }
         return value
     }
+
+    /// Writes exported text content (CSV or TXT) to a file URL in the temporary directory
+    /// so system activities (Save to Files, AirDrop, Mail) treat it as a real file with a proper extension.
+    static func createTemporaryFile(filename: String, content: String) -> URL? {
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        do {
+            try content.write(to: tempURL, atomically: true, encoding: .utf8)
+            return tempURL
+        } catch {
+            return nil
+        }
+    }
 }

@@ -3,8 +3,8 @@ import SwiftData
 import UniformTypeIdentifiers
 
 /// Non-Basketball equivalent of `RosterView`, scoped to one sport. Reuses
-/// `RosterCSV` and `ShareSheet` (both defined alongside Basketball's `RosterView`)
-/// unchanged — the position column is additive and Basketball's CSVs never carry it.
+/// `RosterCSV` (defined alongside Basketball's `RosterView`) unchanged — the
+/// position column is additive and Basketball's CSVs never carry it.
 struct SquadRosterView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var players: [SquadPlayer]
@@ -14,8 +14,6 @@ struct SquadRosterView: View {
     @State private var showAddPlayer = false
     @State private var editingPlayer: SquadPlayer?
     @State private var showImportPicker = false
-    @State private var showExportSheet = false
-    @State private var csvExportContent = ""
     @State private var searchText = ""
     @State private var importError: String?
     @State private var showImportError = false
@@ -77,8 +75,10 @@ struct SquadRosterView: View {
                     Button { showImportPicker = true } label: {
                         Label("Import CSV", systemImage: "square.and.arrow.down")
                     }
-                    Button { exportCSV() } label: {
-                        Label("Export CSV", systemImage: "square.and.arrow.up")
+                    if let exportURL = generateExportURL() {
+                        ShareLink(item: exportURL, preview: SharePreview(exportURL.lastPathComponent, image: Image(systemName: "tablecells"))) {
+                            Label("Export CSV", systemImage: "square.and.arrow.up")
+                        }
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -93,9 +93,6 @@ struct SquadRosterView: View {
         }
         .sheet(item: $editingPlayer) { player in
             SquadPlayerEditView(sport: sport, player: player)
-        }
-        .sheet(isPresented: $showExportSheet) {
-            ShareSheet(items: [csvExportContent])
         }
         .fileImporter(isPresented: $showImportPicker, allowedContentTypes: [.commaSeparatedText, .plainText]) { result in
             handleImport(result: result)
@@ -113,14 +110,15 @@ struct SquadRosterView: View {
         }
     }
 
-    private func exportCSV() {
+    private func generateExportURL() -> URL? {
         var lines = ["Name,Jersey Number,Position"]
         for player in players {
             let jersey = player.jerseyNumber.map { String($0) } ?? ""
             lines.append("\(RosterCSV.escape(player.name)),\(jersey),\(player.preferredPositionCode)")
         }
-        csvExportContent = lines.joined(separator: "\n")
-        showExportSheet = true
+        let content = lines.joined(separator: "\n")
+        let safeSport = sport.rules.displayName.replacingOccurrences(of: " ", with: "_")
+        return RosterCSV.createTemporaryFile(filename: "\(safeSport)_Roster.csv", content: content)
     }
 
     private func handleImport(result: Result<URL, Error>) {
