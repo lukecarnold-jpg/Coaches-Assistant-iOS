@@ -1,50 +1,94 @@
 # Coaches Assistant (iOS)
 
-A native iOS and iPadOS application designed for youth and amateur basketball coaches to manage team rosters, orchestrate balanced player substitutions, track live game clocks and playing time, log game events and scores, and generate AI-powered practice drills.
+A native iOS and iPadOS application designed for youth and amateur sports coaches to manage team rosters, orchestrate balanced player substitutions, track live game clocks and playing time, log match events, scoring, and discipline, and generate AI-powered practice drills across **15 team sports**.
 
 Built with **Swift 6**, **SwiftUI**, **SwiftData**, and **Swift Testing**.
 
 ---
 
+## Project Status
+
+- **Architecture**: Native Swift / SwiftUI application supporting iPhone, iPad, and Mac Catalyst.
+- **Persistence**: SwiftData local-first SQLite container with schema migration recovery.
+- **Multi-Sport Support**: 15 team sports organized into **Court Sports**, **Field Sports**, and **Ice & Water Sports** with sport-specific rules, on-field sizes, period formats, scoring systems, and discipline actions.
+- **AI Practice Drills**: Multi-provider drill generator supporting Google Gemini (`gemini-3.8-flash`), Anthropic Claude (`claude-haiku-4-5`), OpenAI ChatGPT (`gpt-5.6-luna`), and Custom OpenAI-compatible endpoints (Ollama, LM Studio, OpenRouter, Groq, Together.ai).
+- **Security & Privacy**: Zero analytics, zero external servers, local-first storage, with API keys securely stored on-device in the iOS Keychain.
+
+---
+
+## Supported Sports & Rules
+
+Coaches Assistant includes built-in rules, period formats, scoring actions, discipline workflows, and optional positional designations across 15 sports:
+
+| Category | Sport | On-Field / Court | Periods | Scoring Actions | Discipline Actions | Positions |
+| :--- | :--- | :---: | :--- | :--- | :--- | :--- |
+| **Court** | **Basketball** | 5 | 4 Quarters (10 min) | Free Throw (+1), Field Goal (+2), 3-Pointer (+3) | Foul | — |
+| **Court** | **Netball** | 7 | 4 Quarters (15 min) | Goal (+1) | Contact, Obstruction, Footwork, Offside | GS, GA, WA, C, WD, GD, GK |
+| **Court** | **Futsal** | 5 | 2 Halves (20 min) | Goal (+1) | Yellow Card, Red Card (2 min) | GK, FIX, ALA, PIV |
+| **Court** | **Handball** | 7 | 2 Halves (30 min) | Goal (+1) | Yellow Card, 2-Min Suspension, Red Card | GK, LW, LB, CB, RB, RW, PVT |
+| **Court** | **Volleyball** | 6 | 2 Halves (25 min) | Point (+1) | Yellow Card, Red Card, Expulsion | S, OH, MB, OPP, L, DS |
+| **Field** | **Soccer** | 11 | 2 Halves (45 min) | Goal (+1) | Yellow Card, Red Card (Permanent) | GK, DEF, MID, FWD |
+| **Field** | **AFL** | 18 | 4 Quarters (20 min) | Goal (+6), Behind (+1) | Free Kick Against, 50m Penalty | DEF, MID, FWD, RUC, INT |
+| **Field** | **Rugby Union** | 15 | 2 Halves (40 min) | Try (+5), Conversion (+2), Penalty Goal (+3), Drop Goal (+3) | Penalty Conceded, Sin Bin (10 min), Sent Off | FRW, LCK, BR, SH, FH, CTR, BCK |
+| **Field** | **Rugby League** | 13 | 2 Halves (40 min) | Try (+4), Conversion (+2), Penalty Goal (+2), Field Goal (+1) | Penalty Conceded, Sin Bin (10 min), Sent Off | PRP, HKR, 2RW, LF, HB, FE, CTR, WNG, FB |
+| **Field** | **Field Hockey** | 11 | 4 Quarters (15 min) | Goal (+1) | Green Card (2 min), Yellow Card (5 min), Red Card | GK, DEF, MID, FWD |
+| **Field** | **Touch Football**| 6 | 2 Halves (20 min) | Touchdown (+1) | Penalty Conceded, Sin Bin (4 min), Sent Off | MID, LNK, WNG |
+| **Field** | **Lacrosse** | 10 | 4 Quarters (15 min) | Goal (+1), 2-Point Goal (+2) | Technical Foul (30s), Personal Foul (1 min), Expulsion | G, DEF, LSM, MID, FOGO, ATT |
+| **Field** | **Flag Football**| 5 | 2 Halves (20 min) | Touchdown (+6), 1-Pt Conversion (+1), 2-Pt Conversion (+2), Safety (+2) | Penalty, Unsportsmanlike Conduct | QB, C, WR, RB, RUSH, DB, SAF |
+| **Ice & Water** | **Ice Hockey** | 6 | 4 Quarters (15 min) | Goal (+1) | Minor Penalty (2 min), Major Penalty (5 min), Misconduct | G, LD, RD, LW, C, RW |
+| **Ice & Water** | **Water Polo** | 7 | 4 Quarters (8 min) | Goal (+1) | Exclusion (20s), Brutality / Red Card | GK, CF, CB, WNG, DRV, UTL |
+
+---
+
 ## Key Features
 
-### 📋 Roster Management
-- **Player Profiles**: Manage full team rosters with player names and optional jersey numbers.
-- **Search & Filter**: Real-time roster filtering by player name.
-- **CSV Import & Export**: Import rosters from CSV files with automatic column detection (`Name`, `Jersey Number`, `#`, `Player`) and quote/comma escaping; export rosters via the native iOS share sheet.
+### 📋 Roster & Squad Management
+- **Multi-Sport Squads**: Manage independent rosters per sport with player names, optional jersey numbers, and sport-specific positions.
+- **Duplicate Prevention**: Automated detection and alerting for duplicate player names and shared jersey numbers.
+- **CSV Import & Export**: Import rosters from CSV files with automatic column detection (`Name`, `Jersey Number`, `#`, `Player`) and quote/comma escaping; export rosters via the native iOS `ShareLink` share sheet.
 
-### ⏱️ Live Game Clock & Scoreboard
-- **Scoreboard Controls**: Rapid score logging for field goals (+1 Free Throw, +2 PTS, +3 PTS), point adjustments (+/-), and opponent scoring with live lead tracking.
-- **Clock Engine**: High-accuracy stopwatch supporting pause, resume, reset, and manual time overrides.
-- **Flexible Game Formats**: Supports Quarters (1st through 4th + OT) and Halves (1st, 2nd + OT) with customizable period lengths (1–25 minutes).
-- **Period Transitions**: Automatic period advancement with logged period summaries.
+### ⏱️ Live Match Clock & Scoreboard
+- **Sport-Correct Scoring**: Dedicated score sheet and rapid point logging tailored to each sport's specific scoring rules, lead tracking, and score adjustments.
+- **Clock Engine**: Wall-clock delta stopwatch supporting pause, resume, reset, and manual time overrides.
+- **Flexible Match Formats**: Supports Quarters and Halves with configurable period lengths (1–45 minutes).
+- **Shift & Bench Timers**: Real-time on-court shift tracking and bench timer calculation measuring time since last sub-off.
+- **Game Day Mode**: Automatically active for the duration of a live game/fixture (shown via an on-scoreboard badge), and cleared when **End Game** / **End Fixture** is confirmed — groundwork for suppressing in-app sounds and alerts while a match is underway.
 
 ### 🔄 Lineups & Substitution Engine
-- **Starting 5 Setup**: Visual 5-player starting lineup selector before tip-off.
-- **Color-Coded Paired Substitutions**: Intuitive substitution interface pairing outgoing and incoming players with numbered, color-coded badges to ensure 5 players remain on court.
+- **Starting Lineup Setup**: Visual lineup selector sized exactly to each sport's on-field count (5 to 18 players).
+- **Color-Coded Paired Substitutions**: Intuitive substitution interface pairing outgoing and incoming players with numbered, color-coded badges to ensure proper squad count remains on court/field.
 - **Attendance & Auto-Benching**: Pre-game and in-game attendance tracking. Marking a player absent automatically benches them from the court and logs a substitution event.
 
-### 📊 Event-Driven Playing Time
-- **Reconstructed Court Time**: Playing time is calculated dynamically from the immutable substitution and game-end event stream rather than incrementing live counters.
+### 📊 Event-Driven Playing Time & Equal Share
+- **Reconstructed Court Time**: Playing time is calculated dynamically from the immutable substitution and fixture-end event stream rather than incrementing live counters.
+- **Equal-Share Targets**: Calculates each available player's target share of total playing time, surfacing who is ahead or behind to guide fair rotation decisions.
 - **Edit & Rollback Resilient**: Correctly recalculates player minutes even when substitutions are modified or deleted retrospectively.
-- **Live Indicator**: Real-time ticking indicators and on-court badges showing active players during running clocks.
 
-### 📝 Timeline & Coaching Notes
-- **Event History**: Chronological log of substitutions, scores, fouls, MVP votes, period advances, and coaching notes.
-- **Event Rollback**: Swiping to delete a score event automatically reverts scoreboard tallies and restores on-court lineup states.
-- **Exporting**: Export full event logs as CSV spreadsheets and coaching notes as structured text files.
+### 🟨 Discipline & Card Management
+- **Sport-Specific Penalties**: Record fouls, penalties, green/yellow/red cards, sin bins, suspensions, and exclusions.
+- **Temporary & Permanent Removals**: Visual duration tracking for sin bins and timed penalties, with automatic removal from active lineup for send-offs.
 
-### 🤖 AI Drill Generator
-- **Multi-Provider Architecture**: Generate 5 targeted basketball drills tailored by age group (`U8`, `U10`, `U12`, `U14`, `U16`, `U18`, `Senior`).
+### 📝 Timeline, Event Rollback & Coaching Notes
+- **Event History**: Chronological log of substitutions, scores, discipline events, MVP votes, period advances, and coaching notes.
+- **Event Rollback**: Deleting a score or discipline event automatically reverts scoreboard tallies and restores on-court lineup states.
+- **Exporting**: Export full event logs as CSV spreadsheets and coaching notes as structured text files via native `ShareLink`.
+
+### 🤖 AI Practice Drill Generator
+- **Multi-Sport & Age-Tailored**: Generates targeted practice drills tailored by sport and age group (`U8`, `U10`, `U12`, `U14`, `U16`, `U18`, `Senior`).
 - **Supported Providers**:
   - **Google Gemini**: Powered by `gemini-3.8-flash`.
   - **Anthropic Claude**: Powered by `claude-haiku-4-5`.
-  - **OpenAI ChatGPT**: Powered by `gpt-5.6-luna` via the Responses API.
-  - **Custom (OpenAI-Compatible)**: Connect to local or remote endpoints (Ollama, LM Studio, OpenRouter, Groq, Together.ai) by specifying Base URL and Model name.
-- **Keychain Security**: All API keys are securely stored on-device in the iOS Keychain.
+  - **OpenAI ChatGPT**: Powered by `gpt-5.6-luna` via Responses API.
+  - **Custom (OpenAI-Compatible)**: Connect to local or remote endpoints (Ollama, LM Studio, OpenRouter, Groq, Together.ai) with configurable Base URL and Model name.
+- **Keychain Security**: All API keys are securely encrypted at rest on-device in the iOS Keychain.
+
+### ⚙️ Data Management & Safety
+- **Selective Data Deletion**: Selectively delete players, fixtures/games, or events for a specific sport without affecting other sports.
+- **Full Data Reset**: Option to clear all local data across all sports in a single confirmed action.
+- **Local-First Privacy**: No telemetry, no third-party tracking, no remote server sync required.
 
 ### 📱 Adaptive UI & Appearance
-- **iPhone & iPad Layouts**: Compact `TabView` on iPhone and collapsible `NavigationSplitView` sidebar on iPad and macOS.
+- **iPhone & iPad Layouts**: Compact `TabView` on iPhone and collapsible `NavigationSplitView` sidebar on iPad and Mac Catalyst.
 - **Theming**: System, Light, and Dark appearance modes.
 
 ---
@@ -55,55 +99,91 @@ Built with **Swift 6**, **SwiftUI**, **SwiftData**, and **Swift Testing**.
 Coaches Assistant/
 ├── Coaches Assistant.xcodeproj/           # Xcode project configuration
 ├── Coaches Assistant/                     # Application source code
-│   ├── CoachesAssistantApp.swift         # App entry point, SwiftData ModelContainer & theme setup
-│   ├── ContentView.swift                    # Root adaptive layout (TabView / NavigationSplitView)
-│   ├── Assets.xcassets/                     # App icons and color sets
+│   ├── CoachesAssistantApp.swift         # App entry point & SwiftData ModelContainer
+│   ├── ContentView.swift                 # Basketball navigation (TabView / SplitView)
+│   ├── Assets.xcassets/                  # Multi-sport app icons and color palettes
 │   │
-│   ├── Models/                              # SwiftData @Model schema definitions
-│   │   ├── Player.swift                     # Player entity (name, jersey number, ID)
-│   │   ├── Game.swift                       # Game entity, clock state, lineup & playing time engine
-│   │   ├── GameAttendance.swift             # Per-game player attendance and absence flags
-│   │   └── GameEvent.swift                  # Event stream (subs, scores, fouls, MVP, notes)
+│   ├── Models/                           # SwiftData @Model schema definitions
+│   │   ├── Sport.swift                   # Sport enum, rules, scoring, discipline & positions
+│   │   ├── SquadPlayer.swift             # Multi-sport player entity (sport, position, jersey)
+│   │   ├── Fixture.swift                 # Multi-sport match entity (periods, clock, score)
+│   │   ├── FixtureEvent.swift            # Multi-sport match event stream (score, card, sub)
+│   │   ├── FixtureAttendance.swift       # Multi-sport match attendance
+│   │   ├── FixtureLineupSlot.swift       # Multi-sport on-field position slot assignment
+│   │   ├── Player.swift                  # Basketball-specific player entity
+│   │   ├── Game.swift                    # Basketball-specific game entity
+│   │   ├── GameEvent.swift               # Basketball event stream
+│   │   └── GameAttendance.swift          # Basketball attendance
 │   │
-│   ├── Services/                            # Business logic, networking, and security
-│   │   ├── AIAPIKeyStore.swift              # Observable Keychain manager for AI provider credentials
-│   │   ├── AIProvider.swift                 # Supported AI provider enumeration and metadata
-│   │   ├── CustomProviderSettings.swift     # UserDefaults storage for custom Base URL & Model
-│   │   ├── DrillGenerationService.swift     # Networking implementations for Gemini, Claude, OpenAI, Custom
-│   │   ├── KeychainHelper.swift             # Security framework wrapper for generic passwords
-│   │   └── RosterCSV.swift                  # Standalone RFC-compliant CSV parser and generator
+│   ├── Services/                         # Business logic, networking, and security
+│   │   ├── AIAPIKeyStore.swift           # Observable Keychain manager for AI credentials
+│   │   ├── AIProvider.swift              # Supported AI provider enumeration and metadata
+│   │   ├── CustomProviderSettings.swift  # UserDefaults storage for custom Base URL & Model
+│   │   ├── DrillGenerationService.swift  # Network implementations for Gemini, Claude, OpenAI, Custom
+│   │   ├── KeychainHelper.swift          # Security framework wrapper for generic passwords
+│   │   └── RosterCSV.swift               # Standalone RFC-compliant CSV parser and generator
 │   │
-│   └── Views/                               # SwiftUI presentation layer
-│       ├── Game/                            # Game management and live court tracking
-│       │   ├── AttendanceView.swift         # Game attendance toggle sheet
-│       │   ├── EventHistoryView.swift       # Event timeline, event editing, and deletion rollback
-│       │   ├── GameDetailView.swift         # Main game dashboard (scoreboard, clock, court, notes)
-│       │   ├── GameListView.swift           # List of active and completed games
-│       │   ├── GameSetupView.swift          # New game configuration modal
-│       │   ├── LineupSetupView.swift        # Starting 5 and lineup selection modal
-│       │   ├── PlayingTimeView.swift        # Total minutes played summary view
-│       │   └── SubstitutionView.swift       # Visual paired substitution interface
+│   └── Views/                            # SwiftUI presentation layer
+│       ├── Sport/                        # Multi-sport root and chrome
+│       │   ├── RootView.swift            # Root coordinator switching between landing & sport home
+│       │   ├── SportSelectionView.swift  # 15-sport categorized selection grid
+│       │   ├── SportHomeView.swift       # Per-sport navigation container
+│       │   ├── SportChrome.swift         # Top navigation bar with sport switch action
+│       │   └── SportEnvironment.swift    # SwiftUI environment injection for active sport
 │       │
-│       ├── Roster/                          # Roster management
-│       │   ├── PlayerEditView.swift         # Add/edit player modal
-│       │   └── RosterView.swift             # Roster list, search, and CSV import/export
+│       ├── Fixture/                      # Multi-sport fixture tracking
+│       │   ├── FixtureListView.swift     # Active and completed fixtures list
+│       │   ├── FixtureDetailView.swift   # Main match dashboard (scoreboard, clock, field, notes)
+│       │   ├── FixtureSetupView.swift    # New fixture creation modal
+│       │   ├── FixtureLineupView.swift   # On-field starting lineup selector
+│       │   ├── FixtureSubstitutionView.swift # Color-coded paired substitution interface
+│       │   ├── FixtureAttendanceView.swift # Match attendance toggle sheet
+│       │   ├── FixtureEventHistoryView.swift # Match event log & deletion rollback
+│       │   ├── FixturePlayingTimeView.swift # Minutes played and equal-share summary
+│       │   ├── ScoreSheet.swift          # Sport-specific scoring action modal
+│       │   └── DisciplineSheet.swift     # Sport-specific card/infraction modal
 │       │
-│       ├── Settings/                        # App settings and credentials
-│       │   ├── APIKeyInputView.swift        # Secure API key entry sheet
-│       │   ├── CustomProviderConfigView.swift # Base URL and model configuration sheet
-│       │   └── SettingsView.swift           # Appearance, AI provider config, data counts & reset
+│       ├── Game/                         # Basketball-specific match tracking
+│       │   ├── GameListView.swift
+│       │   ├── GameDetailView.swift
+│       │   ├── GameSetupView.swift
+│       │   ├── LineupSetupView.swift
+│       │   ├── SubstitutionView.swift
+│       │   ├── AttendanceView.swift
+│       │   ├── EventHistoryView.swift
+│       │   └── PlayingTimeView.swift
 │       │
-│       └── Training/                        # AI coaching assistant
-│           └── TrainingView.swift           # Age group drill generator and upcoming module previews
+│       ├── Roster/                       # Roster management
+│       │   ├── SquadRosterView.swift     # Multi-sport squad list, search & CSV import/export
+│       │   ├── SquadPlayerEditView.swift # Multi-sport add/edit player modal with position picker
+│       │   ├── PositionPicker.swift      # Sport-specific position selector
+│       │   ├── RosterView.swift          # Basketball roster view
+│       │   └── PlayerEditView.swift      # Basketball player edit modal
+│       │
+│       ├── Settings/                     # App settings and credentials
+│       │   ├── SettingsView.swift        # Appearance, AI provider config, selective data deletion
+│       │   ├── APIKeyInputView.swift     # Secure API key entry sheet
+│       │   ├── CustomProviderConfigView.swift # Custom endpoint configuration sheet
+│       │   └── DataDeletionSheet.swift   # Selective data deletion modal
+│       │
+│       └── Training/                     # AI coaching assistant
+│           ├── SportTrainingView.swift   # Multi-sport drill generator
+│           └── TrainingView.swift        # Basketball drill generator
 │
-├── Coaches AssistantTests/                # Swift Testing unit test suite
-│   ├── CoachesAssistantTests.swift       # Test suite entry
-│   ├── DrillGenerationTests.swift           # Output parsing and line wrapping tests for LLM responses
-│   ├── GameClockTests.swift                 # Clock math, clamping, and period label tests
-│   ├── PlayingTimeTests.swift               # Substitution interval playing time calculation tests
-│   └── RosterCSVTests.swift                 # CSV parsing, column discovery, and escaping tests
+├── Coaches AssistantTests/               # Swift Testing unit test suite
+│   ├── CoachesAssistantTests.swift      # Test suite entry
+│   ├── SportRulesTests.swift            # Rules, scoring, discipline & positions tests
+│   ├── SportSymbolTests.swift           # SF Symbol mapping validation tests
+│   ├── SportDrillPromptTests.swift      # Multi-sport drill prompt builder tests
+│   ├── SquadRosterCSVTests.swift        # Squad CSV import/export validation tests
+│   ├── FixtureLineupSlotTests.swift     # Lineup slot assignment and validation tests
+│   ├── FixturePlayingTimeTests.swift    # Fixture playing time calculation tests
+│   ├── DrillGenerationTests.swift       # LLM response parsing and line wrapping tests
+│   ├── GameClockTests.swift             # Clock math, clamping, and period label tests
+│   ├── PlayingTimeTests.swift           # Substitution interval playing time tests
+│   └── RosterCSVTests.swift             # CSV parser, column discovery, and escaping tests
 │
-└── Coaches AssistantUITests/              # XCUI automation and launch performance tests
+└── Coaches AssistantUITests/             # XCUI automation and launch performance tests
     ├── CoachesAssistantUITests.swift
     └── CoachesAssistantUITestsLaunchTests.swift
 ```
@@ -115,16 +195,24 @@ Coaches Assistant/
 ```mermaid
 flowchart TD
     subgraph UI [SwiftUI Presentation Layer]
-        CV[ContentView]
-        RV[RosterView]
-        GDV[GameDetailView]
-        SV[SubstitutionView]
-        TV[TrainingView]
-        STV[SettingsView]
+        RV[RootView]
+        SSV[SportSelectionView]
+        SC[SportChrome]
+        SHV[SportHomeView]
+        SRV[SquadRosterView]
+        FDV[FixtureDetailView]
+        FSV[FixtureSubstitutionView]
+        STV[SportTrainingView]
+        SET[SettingsView]
     end
 
     subgraph Data [SwiftData Layer]
         MC[ModelContainer]
+        SP[SquadPlayer]
+        FX[Fixture]
+        FE[FixtureEvent]
+        FA[FixtureAttendance]
+        FLS[FixtureLineupSlot]
         P[Player]
         G[Game]
         GE[GameEvent]
@@ -139,22 +227,25 @@ flowchart TD
         CPS[CustomProviderSettings]
     end
 
-    CV --> RV & GDV & TV & STV
-    RV --> P & CSV
-    GDV --> G & GE & GA & SV
-    TV --> DGS
+    RV --> SSV & SC
+    SC --> SHV
+    SHV --> SRV & FDV & STV & SET
+    SRV --> SP & CSV
+    FDV --> FX & FE & FA & FLS & FSV
+    STV --> DGS
     DGS --> AKS & CPS
     AKS --> KC
-    MC --> P & G & GE & GA
+    MC --> SP & FX & FE & FA & FLS & P & G & GE & GA
 ```
 
 ### Key Architectural Highlights
 
-1. **Event-Sourced Playing Time Model**: Instead of maintaining running timers per player, playing time is reconstructed mathematically from the `GameEvent` log (`.substitutionIn`, `.substitutionOut`, `.gameEnd`). This guarantees accuracy regardless of clock pauses, retrospective event editing, or app restarts.
-2. **Robust Multi-Provider AI**: The `DrillGenerating` protocol abstracts away differences between Google Gemini (v1beta REST), Anthropic Claude (Messages API), OpenAI (Responses API), and OpenAI-compatible local/remote servers (Chat Completions API).
-3. **Secure Credential Storage**: Uses Apple's `Security` framework via `KeychainHelper` to store sensitive API tokens in the device Keychain rather than plain text `UserDefaults`.
-4. **Adaptive Presentation**: Reacts to `horizontalSizeClass` to present a 4-tab bar navigation structure on iPhone and a `NavigationSplitView` sidebar on iPad and macOS.
-5. **Modern Swift Testing**: Utilizes Apple's native `Testing` framework (`@Test`, `#expect`) for fast, concurrent test execution without `XCTest` legacy overhead.
+1. **Generalized Multi-Sport Engine**: Configured through declarative `SportRules` structs defining on-field player counts, period structures, scoring point values, discipline rules (temporary sin bins vs permanent send-offs), and positional lists across 15 sports.
+2. **Event-Sourced Playing Time Model**: Instead of maintaining fragile running timers per player, playing time is reconstructed mathematically from the `FixtureEvent` / `GameEvent` stream (`.substitutionIn`, `.substitutionOut`, `.fixtureEnd`). This guarantees accuracy regardless of clock pauses, retrospective event editing, or app restarts.
+3. **Robust Multi-Provider AI**: The `DrillGenerating` protocol abstracts away differences between Google Gemini (v1beta REST), Anthropic Claude (Messages API), OpenAI (Responses API), and OpenAI-compatible local/remote servers (Chat Completions API).
+4. **Secure Credential Storage**: Uses Apple's `Security` framework via `KeychainHelper` to store sensitive API tokens in the device Keychain rather than plain text `UserDefaults`.
+5. **Adaptive Presentation**: Seamlessly adapts between compact `TabView` on iPhone and `NavigationSplitView` sidebar on iPad and macOS.
+6. **Modern Swift Testing**: Utilizes Apple's native `Testing` framework (`@Test`, `#expect`) for fast, concurrent test execution without legacy `XCTest` overhead.
 
 ---
 
@@ -168,8 +259,8 @@ flowchart TD
 ### Building and Running
 1. Clone the repository:
    ```bash
-   git clone https://github.com/lukecarnold-jpg/Coaches-Assistant-iOS.git
-   cd "Coaches-Assistant-iOS/Coaches Assistant"
+   git clone https://github.com/lukecarnold-jpg/Basketball-Rotation-iOS.git
+   cd "Basketball-Rotation-iOS/Basketball Rotation"
    ```
 2. Open `Coaches Assistant.xcodeproj` in Xcode.
 3. Select an iOS Simulator (e.g., iPhone 16 Pro or iPad Pro) or a connected physical device.
@@ -184,8 +275,9 @@ xcodebuild test -project "Coaches Assistant.xcodeproj" -scheme "Coaches Assistan
 ---
 
 ## Requirements & Permissions
-- **Keychain Access**: Generic password read/write for AI API keys (no special entitlement required for standard app sandbox Keychain).
+- **Keychain Access**: Generic password read/write for AI API keys (managed securely within the standard app sandbox Keychain).
 - **Network Access**: Outbound HTTPS requests to AI provider endpoints when generating practice drills.
+- **Local Network Access**: Optional HTTP communication for local OpenAI-compatible endpoints (e.g., Ollama or LM Studio running on a local LAN server).
 - **Local Storage**: SwiftData SQLite store managed inside the app container sandbox.
 
 ---

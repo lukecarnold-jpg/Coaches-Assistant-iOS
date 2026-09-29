@@ -47,6 +47,26 @@ struct FixtureDetailView: View {
         allPlayers.filter { fixture.onFieldPlayerIDs.contains($0.playerID.uuidString) }
     }
 
+    /// Present players who haven't been sent off — the actual pool substitutions
+    /// can draw from, matching `FixtureSubstitutionView.benchPlayers`'s filter.
+    var eligiblePlayers: [SquadPlayer] {
+        let sentOff = fixture.sentOffPlayerIDs
+        return presentPlayers.filter { !sentOff.contains($0.playerID) }
+    }
+
+    /// True once the eligible pool is too small to leave anyone on the bench —
+    /// covers both "exactly enough" and "short-handed" squads.
+    var hasNoSubstitutesAvailable: Bool {
+        !fixture.isEnded && eligiblePlayers.count <= rules.onFieldCount
+    }
+
+    var noSubstitutesMessage: String {
+        if eligiblePlayers.count < rules.onFieldCount {
+            return "Only \(eligiblePlayers.count) of \(rules.onFieldCount) players available — no bench to substitute from."
+        }
+        return "Exactly \(rules.onFieldCount) players available — no bench to substitute from."
+    }
+
     var sortedEvents: [FixtureEvent] {
         fixture.events.sorted { $0.timestamp > $1.timestamp }
     }
@@ -58,6 +78,9 @@ struct FixtureDetailView: View {
                 clockSection
                 if fixture.onFieldPlayerIDs.isEmpty && !fixture.isEnded {
                     lineupBanner
+                }
+                if hasNoSubstitutesAvailable {
+                    noSubstitutesBanner
                 }
                 actionsSection
                 onFieldSection
@@ -315,6 +338,26 @@ struct FixtureDetailView: View {
         }
     }
 
+    // MARK: - No Substitutes Banner
+
+    var noSubstitutesBanner: some View {
+        HStack {
+            Image(systemName: "person.2.slash.fill")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading) {
+                Text(eligiblePlayers.count < rules.onFieldCount ? "Playing Short-Handed" : "No Substitutes Available")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text(noSubstitutesMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding()
+        .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+    }
+
     // MARK: - Actions Section
 
     var actionsSection: some View {
@@ -326,7 +369,7 @@ struct FixtureDetailView: View {
                 ActionButton(title: "MVP Vote", icon: "star.fill", color: .yellow) {
                     showMVPPicker = true
                 }
-                ActionButton(title: "Sub", icon: "arrow.left.arrow.right", color: .purple) {
+                ActionButton(title: "Sub", icon: "arrow.left.arrow.right", color: .purple, isDisabled: hasNoSubstitutesAvailable) {
                     showSubstitution = true
                 }
                 if fixture.currentPeriod < fixture.totalPeriods {
@@ -529,6 +572,7 @@ struct FixtureDetailView: View {
     private func endFixture() {
         stopClock()
         fixture.isEnded = true
+        fixture.isGameDayModeActive = false
         let event = FixtureEvent(fixture: fixture, eventType: .fixtureEnd, detail: "Final: \(fixture.teamScore) – \(fixture.opponentScore)", periodNumber: fixture.currentPeriod, elapsedSeconds: fixture.elapsedSeconds)
         modelContext.insert(event)
         fixture.events.append(event)

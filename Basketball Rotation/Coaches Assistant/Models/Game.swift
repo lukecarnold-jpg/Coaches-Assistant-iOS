@@ -13,6 +13,7 @@ final class Game {
     var opponentScore: Int
     var notes: String
     var isEnded: Bool
+    var isGameDayModeActive: Bool
 
     // Clock state
     var elapsedSeconds: Int
@@ -40,6 +41,7 @@ final class Game {
         self.opponentScore = 0
         self.notes = ""
         self.isEnded = false
+        self.isGameDayModeActive = true
         self.elapsedSeconds = 0
         self.clockIsRunning = false
         self.clockStartedAt = nil

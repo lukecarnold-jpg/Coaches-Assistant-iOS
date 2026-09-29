@@ -31,6 +31,21 @@ struct GameDetailView: View {
         allPlayers.filter { game.onCourtPlayerIDs.contains($0.playerID.uuidString) }
     }
 
+    private let requiredOnCourtCount = 5
+
+    /// True once the present roster is too small to leave anyone on the bench —
+    /// covers both "exactly enough" and "short-handed" squads.
+    var hasNoSubstitutesAvailable: Bool {
+        !game.isEnded && presentPlayers.count <= requiredOnCourtCount
+    }
+
+    var noSubstitutesMessage: String {
+        if presentPlayers.count < requiredOnCourtCount {
+            return "Only \(presentPlayers.count) of \(requiredOnCourtCount) players present — no bench to substitute from."
+        }
+        return "Exactly \(requiredOnCourtCount) players present — no bench to substitute from."
+    }
+
     var sortedEvents: [GameEvent] {
         game.events.sorted { $0.timestamp > $1.timestamp }
     }
@@ -42,6 +57,9 @@ struct GameDetailView: View {
                 clockSection
                 if game.onCourtPlayerIDs.isEmpty && !game.isEnded {
                     lineupBanner
+                }
+                if hasNoSubstitutesAvailable {
+                    noSubstitutesBanner
                 }
                 actionsSection
                 onCourtSection
@@ -146,6 +164,15 @@ struct GameDetailView: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 3)
                     .background(game.isEnded ? Color.gray.opacity(0.15) : Color.blue.opacity(0.1), in: Capsule())
+
+                if game.isGameDayModeActive {
+                    Label("Game Day Mode", systemImage: "bell.slash.fill")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 3)
+                        .background(Color.indigo, in: Capsule())
+                }
             }
 
             HStack(spacing: 0) {
@@ -294,6 +321,26 @@ struct GameDetailView: View {
         }
     }
 
+    // MARK: - No Substitutes Banner
+
+    var noSubstitutesBanner: some View {
+        HStack {
+            Image(systemName: "person.2.slash.fill")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading) {
+                Text(presentPlayers.count < requiredOnCourtCount ? "Playing Short-Handed" : "No Substitutes Available")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text(noSubstitutesMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding()
+        .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+    }
+
     // MARK: - Actions Section
 
     var actionsSection: some View {
@@ -305,7 +352,7 @@ struct GameDetailView: View {
                 ActionButton(title: "MVP Vote", icon: "star.fill", color: .yellow) {
                     showMVPPicker = true
                 }
-                ActionButton(title: "Sub", icon: "arrow.left.arrow.right", color: .purple) {
+                ActionButton(title: "Sub", icon: "arrow.left.arrow.right", color: .purple, isDisabled: hasNoSubstitutesAvailable) {
                     showSubstitution = true
                 }
                 if game.currentPeriod < game.totalPeriods {
@@ -464,6 +511,7 @@ struct GameDetailView: View {
     private func endGame() {
         stopClock()
         game.isEnded = true
+        game.isGameDayModeActive = false
         let event = GameEvent(game: game, eventType: .gameEnd, detail: "Final: \(game.teamScore) – \(game.opponentScore)", periodNumber: game.currentPeriod, elapsedSeconds: game.elapsedSeconds)
         modelContext.insert(event)
         game.events.append(event)
@@ -547,6 +595,7 @@ struct ActionButton: View {
     let title: String
     let icon: String
     let color: Color
+    var isDisabled: Bool = false
     let action: () -> Void
 
     var body: some View {
@@ -559,9 +608,10 @@ struct ActionButton: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
-            .background(color.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
-            .foregroundStyle(color)
+            .background(color.opacity(isDisabled ? 0.05 : 0.1), in: RoundedRectangle(cornerRadius: 12))
+            .foregroundStyle(isDisabled ? color.opacity(0.4) : color)
         }
+        .disabled(isDisabled)
     }
 }
 
