@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build & Test
+    runs-on: macos-latest
+
+    defaults:
+      run:
+        working-directory: "Basketball Rotation"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Build and test
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project "Coaches Assistant.xcodeproj" \
+            -scheme "Coaches Assistant" \
+            -destination "platform=iOS Simulator,name=iPhone 16 Pro" \
+            -resultBundlePath "$PWD/TestResults.xcresult" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: "Basketball Rotation/TestResults.xcresult"
+          if-no-files-found: ignore
