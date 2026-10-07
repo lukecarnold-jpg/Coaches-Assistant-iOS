@@ -28,6 +28,7 @@ struct GameListView: View {
                 Button { showNewGame = true } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("New game")
             }
         }
         .sheet(isPresented: $showNewGame) {

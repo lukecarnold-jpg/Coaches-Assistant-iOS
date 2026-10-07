@@ -57,7 +57,7 @@ struct SidebarNavigationView: View {
                 Label(tab.rawValue, systemImage: tab.systemImage)
                     .tag(tab)
             }
-            .navigationTitle("Basketball Rotation")
+            .navigationTitle("Basketball")
         } detail: {
             NavigationStack {
                 switch selectedTab {

@@ -37,6 +37,7 @@ struct FixtureListView: View {
                 Button { showNewFixture = true } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("New fixture")
             }
         }
         .sheet(isPresented: $showNewFixture) {
