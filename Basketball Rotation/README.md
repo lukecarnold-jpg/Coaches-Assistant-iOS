@@ -53,6 +53,7 @@ Coaches Assistant includes built-in rules, period formats, scoring actions, disc
 - **Clock Engine**: Wall-clock delta stopwatch supporting pause, resume, confirmed reset (logged to history), and validated manual time overrides. The clock stops itself at 0:00 so time left running into a break is never credited as playing time.
 - **Flexible Match Formats**: Supports Quarters and Halves with configurable period lengths (1–45 minutes), plus unlimited overtime periods (OT 1, OT 2, …).
 - **Shift & Bench Timers**: Real-time on-court shift tracking and bench timer calculation measuring time since last sub-off.
+- **Live Activity**: Once the clock starts, the score, period and a live countdown appear on the Lock Screen and in the Dynamic Island, updating as you score; the final score stays for 15 minutes after the match ends.
 - **Game Day Mode**: On by default for a live game/fixture (shown via an on-scoreboard badge, toggleable from the match menu) and keeps the screen awake so the device doesn't auto-lock mid-period. Cleared when **End Game** / **End Fixture** is confirmed.
 
 ### 🔄 Lineups & Substitution Engine
@@ -176,6 +177,10 @@ Coaches Assistant/
 │       │
 │       └── Training/                     # AI coaching assistant
 │           └── SportTrainingView.swift   # Drill generator for every sport
+│
+├── MatchLiveActivity/                    # Widget extension: Lock Screen / Dynamic Island Live Activity
+│   ├── MatchLiveActivity.swift           # Live Activity UI
+│   └── MatchLiveActivityBundle.swift     # Widget bundle entry point
 │
 ├── Coaches AssistantTests/               # Swift Testing unit test suite
 │   ├── CoachesAssistantTests.swift      # Test suite entry

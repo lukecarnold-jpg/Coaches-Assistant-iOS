@@ -92,6 +92,11 @@ struct FixtureDetailView: View {
         .navigationTitle("vs \(fixture.opponentName)")
         .navigationBarTitleDisplayMode(.inline)
         .keepsScreenAwake(fixture.isGameDayModeActive && !fixture.isEnded)
+        // Mirror score, period and clock to the Lock Screen / Dynamic Island.
+        .onAppear { MatchLiveActivityController.sync(fixture) }
+        .onChange(of: MatchLiveActivityController.state(for: fixture)) { _, _ in
+            MatchLiveActivityController.sync(fixture)
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
