@@ -172,7 +172,7 @@ final class Fixture {
     }
 }
 
-extension Fixture: TimedMatch {
+extension Fixture: nonisolated TimedMatch {
     var playingTimeEvents: [PlayingTimeEvent] {
         events.map { event in
             let kind: PlayingTimeEvent.Kind
