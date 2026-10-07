@@ -15,8 +15,16 @@ struct SportHomeView: View {
                     NavigationStack { SquadRosterView(sport: sport) }
                         .tabItem { Label("Roster", systemImage: "person.3.fill") }
 
-                    NavigationStack { FixtureListView(sport: sport) }
-                        .tabItem { Label("Fixtures", systemImage: "sportscourt.fill") }
+                    if sport.rules.isStatsOnly {
+                        NavigationStack { CricketMatchListView() }
+                            .tabItem { Label("Matches", systemImage: "list.bullet.rectangle.fill") }
+
+                        NavigationStack { CricketSeasonStatsView() }
+                            .tabItem { Label("Stats", systemImage: "chart.bar.fill") }
+                    } else {
+                        NavigationStack { FixtureListView(sport: sport) }
+                            .tabItem { Label("Fixtures", systemImage: "sportscourt.fill") }
+                    }
 
                     NavigationStack { SportTrainingView(sport: sport) }
                         .tabItem { Label("Training", systemImage: "figure.run") }
@@ -39,6 +47,8 @@ private struct SportSidebarNavigationView: View {
     enum SportTab: String, CaseIterable, Hashable {
         case roster    = "Roster"
         case fixtures  = "Fixtures"
+        case matches   = "Matches"
+        case stats     = "Stats"
         case training  = "Training"
         case settings  = "Settings"
 
@@ -46,15 +56,24 @@ private struct SportSidebarNavigationView: View {
             switch self {
             case .roster:   return "person.3.fill"
             case .fixtures: return "sportscourt.fill"
+            case .matches:  return "list.bullet.rectangle.fill"
+            case .stats:    return "chart.bar.fill"
             case .training: return "figure.run"
             case .settings: return "gear"
             }
+        }
+
+        /// Stats-only sports (Cricket) record scorecards instead of live fixtures.
+        static func tabs(for sport: Sport) -> [SportTab] {
+            sport.rules.isStatsOnly
+                ? [.roster, .matches, .stats, .training, .settings]
+                : [.roster, .fixtures, .training, .settings]
         }
     }
 
     var body: some View {
         NavigationSplitView {
-            List(SportTab.allCases, id: \.self, selection: $selectedTab) { tab in
+            List(SportTab.tabs(for: sport), id: \.self, selection: $selectedTab) { tab in
                 Label(tab.rawValue, systemImage: tab.systemImage)
                     .tag(tab)
             }
@@ -64,6 +83,8 @@ private struct SportSidebarNavigationView: View {
                 switch selectedTab {
                 case .roster:   SquadRosterView(sport: sport)
                 case .fixtures: FixtureListView(sport: sport)
+                case .matches:  CricketMatchListView()
+                case .stats:    CricketSeasonStatsView()
                 case .training: SportTrainingView(sport: sport)
                 case .settings: SettingsView()
                 case nil:       SquadRosterView(sport: sport)

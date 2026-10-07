@@ -50,6 +50,8 @@ struct CoachesAssistantApp: App {
             FixtureEvent.self,
             FixtureAttendance.self,
             FixtureLineupSlot.self,
+            CricketMatch.self,
+            CricketPlayerStats.self,
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

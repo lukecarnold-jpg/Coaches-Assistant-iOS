@@ -10,6 +10,7 @@ struct TimedMatchTests {
         let schema = Schema([
             Player.self, Game.self, GameEvent.self, GameAttendance.self,
             SquadPlayer.self, Fixture.self, FixtureEvent.self, FixtureAttendance.self, FixtureLineupSlot.self,
+            CricketMatch.self, CricketPlayerStats.self,
         ])
         let container = try ModelContainer(for: schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         return ModelContext(container)

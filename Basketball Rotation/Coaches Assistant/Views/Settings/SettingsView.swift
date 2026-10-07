@@ -23,6 +23,7 @@ struct SettingsView: View {
     @Query private var games: [Game]
     @Query private var squadPlayers: [SquadPlayer]
     @Query private var fixtures: [Fixture]
+    @Query private var cricketMatches: [CricketMatch]
     @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
     @AppStorage("selectedAIProvider") private var selectedProviderRaw = AIProvider.gemini.rawValue
     @State private var keyStore = AIAPIKeyStore.shared
@@ -99,6 +100,12 @@ struct SettingsView: View {
                     Text("Other Sports — Fixtures")
                     Spacer()
                     Text("\(fixtures.count)")
+                        .foregroundStyle(.secondary)
+                }
+                HStack {
+                    Text("Cricket — Matches")
+                    Spacer()
+                    Text("\(cricketMatches.count)")
                         .foregroundStyle(.secondary)
                 }
             }

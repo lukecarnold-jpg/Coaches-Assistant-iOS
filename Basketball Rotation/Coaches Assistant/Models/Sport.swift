@@ -19,6 +19,7 @@ nonisolated enum Sport: String, CaseIterable, Identifiable, Hashable, Codable {
     case futsal
     case volleyball
     case touchFootball
+    case cricket
 
     var id: String { rawValue }
 
@@ -446,6 +447,34 @@ nonisolated enum Sport: String, CaseIterable, Identifiable, Hashable, Codable {
                     Position(code: "WNG", name: "Wing"),
                 ]
             )
+        case .cricket:
+            // Stats-only: no clock, rotations or substitutions. Matches are recorded
+            // as scorecards (`CricketMatch`) rather than `Fixture`s, so the period
+            // fields below are placeholders that nothing reads.
+            return SportRules(
+                displayName: "Cricket",
+                systemImage: "figure.cricket",
+                onFieldCount: 11,
+                periodFormat: "halves",
+                periodCount: 2,
+                defaultPeriodMinutes: 20,
+                maxPeriodMinutes: 50,
+                onFieldTerm: "Playing XI",
+                drillNoun: "cricket",
+                scoringActions: [
+                    ScoringAction(code: "run", label: "Run", points: 1),
+                    ScoringAction(code: "four", label: "Four", points: 4),
+                    ScoringAction(code: "six", label: "Six", points: 6),
+                ],
+                disciplineActions: [],
+                positions: [
+                    Position(code: "BAT", name: "Batter"),
+                    Position(code: "BWL", name: "Bowler"),
+                    Position(code: "AR", name: "All-Rounder"),
+                    Position(code: "WK", name: "Wicketkeeper"),
+                ],
+                isStatsOnly: true
+            )
         }
     }
 }
@@ -493,6 +522,9 @@ nonisolated struct SportRules {
     let scoringActions: [ScoringAction]
     let disciplineActions: [DisciplineAction]
     let positions: [Position]
+    /// True for sports recorded as a post-match scorecard (Cricket) instead of a
+    /// live clock/rotation fixture.
+    var isStatsOnly: Bool = false
 
     var hasPositions: Bool { !positions.isEmpty }
 

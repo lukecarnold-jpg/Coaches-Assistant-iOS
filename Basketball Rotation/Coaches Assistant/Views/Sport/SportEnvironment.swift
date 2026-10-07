@@ -18,6 +18,7 @@ extension Sport {
         case .futsal:         return Color(red: 0.1, green: 0.7, blue: 0.5)
         case .volleyball:     return Color(red: 0.9, green: 0.5, blue: 0.1)
         case .touchFootball:  return Color(red: 0.8, green: 0.2, blue: 0.4)
+        case .cricket:        return Color(red: 0.15, green: 0.5, blue: 0.3)
         }
     }
 }

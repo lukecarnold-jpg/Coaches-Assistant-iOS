@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 /// Granular categories of data that can be selected for deletion.
-enum DeletionTarget: Hashable, Identifiable {
+nonisolated enum DeletionTarget: Hashable, Identifiable {
     case basketballPlayers
     case basketballGames
     case squadPlayers(Sport)
@@ -40,6 +40,7 @@ struct DataDeletionSheet: View {
     @Query private var games: [Game]
     @Query private var squadPlayers: [SquadPlayer]
     @Query private var fixtures: [Fixture]
+    @Query private var cricketMatches: [CricketMatch]
 
     @State private var selectedTargets: Set<DeletionTarget> = []
     @State private var showConfirmDialog = false
@@ -55,7 +56,7 @@ struct DataDeletionSheet: View {
     }
 
     private var totalDataCount: Int {
-        players.count + games.count + squadPlayers.count + fixtures.count
+        players.count + games.count + squadPlayers.count + fixtures.count + cricketMatches.count
     }
 
     private var totalSelectedCount: Int {
@@ -67,7 +68,7 @@ struct DataDeletionSheet: View {
                 count += squadPlayers.filter { $0.sport == sport.rawValue }.count
             }
             if selectedTargets.contains(.fixtures(sport)) {
-                count += fixtures.filter { $0.sport == sport.rawValue }.count
+                count += matchCount(for: sport)
             }
         }
         return count
@@ -99,7 +100,7 @@ struct DataDeletionSheet: View {
                         }
                     }
                 } footer: {
-                    Text("Selecting All Data will remove all players, squads, games, fixtures, and events on this device.")
+                    Text("Selecting All Data will remove all players, squads, games, fixtures, cricket matches, and events on this device.")
                 }
 
                 sportSection(for: .basketball)
@@ -166,7 +167,6 @@ struct DataDeletionSheet: View {
                 )
             } else {
                 let sportSquad = squadPlayers.filter { $0.sport == sport.rawValue }
-                let sportFixtures = fixtures.filter { $0.sport == sport.rawValue }
 
                 targetRow(
                     target: .squadPlayers(sport),
@@ -176,8 +176,8 @@ struct DataDeletionSheet: View {
                 )
                 targetRow(
                     target: .fixtures(sport),
-                    title: "Fixtures & History",
-                    count: sportFixtures.count,
+                    title: sport.rules.isStatsOnly ? "Matches & Stats" : "Fixtures & History",
+                    count: matchCount(for: sport),
                     icon: "clock.arrow.circlepath"
                 )
             }
@@ -211,6 +211,11 @@ struct DataDeletionSheet: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// Fixtures for timed sports; scorecards for stats-only Cricket.
+    private func matchCount(for sport: Sport) -> Int {
+        sport.rules.isStatsOnly ? cricketMatches.count : fixtures.filter { $0.sport == sport.rawValue }.count
     }
 
     private func isSportFullySelected(_ sport: Sport) -> Bool {
@@ -267,6 +272,8 @@ struct DataDeletionSheet: View {
                 try modelContext.delete(model: FixtureAttendance.self)
                 try modelContext.delete(model: Fixture.self)
                 try modelContext.delete(model: SquadPlayer.self)
+                try modelContext.delete(model: CricketPlayerStats.self)
+                try modelContext.delete(model: CricketMatch.self)
             } else {
                 if selectedTargets.contains(.basketballGames) {
                     for game in games {
@@ -286,7 +293,14 @@ struct DataDeletionSheet: View {
                 }
 
                 for sport in Sport.allCases where sport != .basketball {
-                    if selectedTargets.contains(.fixtures(sport)) {
+                    if sport.rules.isStatsOnly, selectedTargets.contains(.fixtures(sport)) {
+                        for match in cricketMatches {
+                            for line in match.playerStats {
+                                modelContext.delete(line)
+                            }
+                            modelContext.delete(match)
+                        }
+                    } else if selectedTargets.contains(.fixtures(sport)) {
                         let matchingFixtures = fixtures.filter { $0.sport == sport.rawValue }
                         for fixture in matchingFixtures {
                             for slot in fixture.lineupSlots {
