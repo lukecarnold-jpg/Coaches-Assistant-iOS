@@ -30,6 +30,7 @@ struct SettingsView: View {
     @State private var showDeleteSheet = false
     @State private var showDeleteSuccess = false
     @State private var editingProvider: AIProvider?
+    @State private var showKeySaveError = false
 
     var body: some View {
         Form {
@@ -135,11 +136,11 @@ struct SettingsView: View {
         .sheet(item: $editingProvider) { provider in
             if provider == .custom {
                 CustomProviderConfigView(currentKey: keyStore.apiKey(for: provider)) { newValue in
-                    keyStore.setAPIKey(newValue, for: provider)
+                    if !keyStore.setAPIKey(newValue, for: provider) { showKeySaveError = true }
                 }
             } else {
                 APIKeyInputView(provider: provider, currentKey: keyStore.apiKey(for: provider)) { newValue in
-                    keyStore.setAPIKey(newValue, for: provider)
+                    if !keyStore.setAPIKey(newValue, for: provider) { showKeySaveError = true }
                 }
             }
         }
@@ -147,6 +148,11 @@ struct SettingsView: View {
             DataDeletionSheet {
                 showDeleteSuccess = true
             }
+        }
+        .alert("Couldn't Save API Key", isPresented: $showKeySaveError) {
+            Button("OK") {}
+        } message: {
+            Text("The key couldn't be stored in the Keychain. Please try again.")
         }
         .alert("Data Deleted", isPresented: $showDeleteSuccess) {
             Button("OK") {}

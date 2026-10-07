@@ -30,21 +30,32 @@ extension DrillGenerating {
 extension AIProvider {
     var drillService: DrillGenerating {
         switch self {
-        case .gemini: return GeminiDrillService()
-        case .claude: return ClaudeDrillService()
-        case .openAI: return OpenAIDrillService()
+        case .gemini: return GeminiDrillService(model: effectiveModel)
+        case .claude: return ClaudeDrillService(model: effectiveModel)
+        case .openAI: return OpenAIDrillService(model: effectiveModel)
         case .custom: return CustomDrillService(baseURL: CustomProviderSettings.shared.baseURL, model: CustomProviderSettings.shared.model)
         }
     }
 }
 
-func drillPrompt(ageGroup: String, sport: Sport) -> String {
+/// Shared session with a bounded timeout, so a stalled provider surfaces an error
+/// instead of leaving the Training screen spinning indefinitely.
+enum DrillHTTP {
+    static let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForResource = 60
+        return URLSession(configuration: config)
+    }()
+}
+
+nonisolated func drillPrompt(ageGroup: String, sport: Sport) -> String {
     "Generate 5 \(sport.rules.drillNoun) practice drills suitable for \(ageGroup) players. For each drill, provide a short name followed by a 1-2 sentence description. Format as a numbered list with just the drill name and description, no extra headers."
 }
 
 /// Numbered-list parsing shared by every provider — the request/response plumbing
 /// differs per API, but the prompted output shape ("1. Name — description") is the same.
-func parseDrillList(from text: String) -> [String] {
+nonisolated func parseDrillList(from text: String) -> [String] {
     let lines = text.components(separatedBy: "\n")
     var result: [String] = []
     var currentDrill = ""
@@ -80,15 +91,22 @@ private func apiErrorMessage(from data: Data) -> String {
 // MARK: - Gemini
 
 struct GeminiDrillService: DrillGenerating {
+    var model: String = AIProvider.gemini.defaultModel
+
     func generateDrills(ageGroup: String, apiKey: String, sport: Sport) async throws -> [String] {
-        let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=\(apiKey)")!
+        guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent") else {
+            throw DrillGenerationError.missingConfiguration("The Gemini model name isn't valid.")
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        // Sent as a header rather than a `?key=` query parameter, which would end up
+        // in proxy and server access logs.
+        request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let body: [String: Any] = ["contents": [["parts": [["text": drillPrompt(ageGroup: ageGroup, sport: sport)]]]]]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await DrillHTTP.session.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw DrillGenerationError.apiError(apiErrorMessage(from: data))
         }
@@ -106,8 +124,7 @@ struct GeminiDrillService: DrillGenerating {
 // MARK: - Claude
 
 struct ClaudeDrillService: DrillGenerating {
-    /// Haiku 4.5 — current fast/cheap tier, plenty for a short templated drill list.
-    private let model = "claude-haiku-4-5-20251001"
+    var model: String = AIProvider.claude.defaultModel
 
     func generateDrills(ageGroup: String, apiKey: String, sport: Sport) async throws -> [String] {
         let url = URL(string: "https://api.anthropic.com/v1/messages")!
@@ -123,7 +140,7 @@ struct ClaudeDrillService: DrillGenerating {
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await DrillHTTP.session.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw DrillGenerationError.apiError(apiErrorMessage(from: data))
         }
@@ -139,8 +156,7 @@ struct ClaudeDrillService: DrillGenerating {
 // MARK: - OpenAI
 
 struct OpenAIDrillService: DrillGenerating {
-    /// GPT-5.6 Luna — current cheapest/fastest tier via the Responses API.
-    private let model = "gpt-5.6-luna"
+    var model: String = AIProvider.openAI.defaultModel
 
     func generateDrills(ageGroup: String, apiKey: String, sport: Sport) async throws -> [String] {
         let url = URL(string: "https://api.openai.com/v1/responses")!
@@ -151,7 +167,7 @@ struct OpenAIDrillService: DrillGenerating {
         let body: [String: Any] = ["model": model, "input": drillPrompt(ageGroup: ageGroup, sport: sport)]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await DrillHTTP.session.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw DrillGenerationError.apiError(apiErrorMessage(from: data))
         }
@@ -196,7 +212,7 @@ struct CustomDrillService: DrillGenerating {
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await DrillHTTP.session.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw DrillGenerationError.apiError(apiErrorMessage(from: data))
         }

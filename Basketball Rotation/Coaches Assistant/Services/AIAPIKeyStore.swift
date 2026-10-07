@@ -18,9 +18,16 @@ final class AIAPIKeyStore {
         keys[provider] ?? ""
     }
 
-    func setAPIKey(_ value: String, for provider: AIProvider) {
-        keys[provider] = value
-        KeychainHelper.save(value, account: provider.keychainAccount, service: Self.service)
+    /// Persists the key, updating the in-memory copy only if the Keychain write
+    /// succeeded. Returns false on failure so Settings can tell the coach.
+    @discardableResult
+    func setAPIKey(_ value: String, for provider: AIProvider) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard KeychainHelper.save(trimmed, account: provider.keychainAccount, service: Self.service) else {
+            return false
+        }
+        keys[provider] = trimmed
+        return true
     }
 
     /// Whether this provider is ready to use. The custom provider doesn't require a key
