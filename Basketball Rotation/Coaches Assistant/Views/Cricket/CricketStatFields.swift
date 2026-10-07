@@ -11,7 +11,9 @@ struct CricketStatField: View {
         HStack {
             Text(title)
             Spacer()
-            TextField(title, value: clampedBinding, format: .number)
+            // Text-backed so a zero shows as the "0" placeholder: typing replaces
+            // it instead of appending (tapping a literal "0" then typing 45 gave 450).
+            TextField("0", text: textBinding)
                 .keyboardType(.numberPad)
                 .multilineTextAlignment(.trailing)
                 .frame(width: 64)
@@ -19,6 +21,16 @@ struct CricketStatField: View {
             Stepper(title, value: clampedBinding, in: range)
                 .labelsHidden()
         }
+    }
+
+    private var textBinding: Binding<String> {
+        Binding(
+            get: { value == 0 ? "" : String(value) },
+            set: { text in
+                let parsed = Int(text.filter(\.isNumber)) ?? 0
+                value = min(max(parsed, range.lowerBound), range.upperBound)
+            }
+        )
     }
 
     private var clampedBinding: Binding<Int> {

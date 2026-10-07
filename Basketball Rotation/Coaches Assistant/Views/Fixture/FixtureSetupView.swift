@@ -1,10 +1,9 @@
 import SwiftUI
 import SwiftData
 
-/// Non-Basketball equivalent of `GameSetupView`. Seeds period format/length
-/// from the sport's rules and caps the minutes picker at `rules.maxPeriodMinutes`
-/// (soccer 45 / rugby 40 / AFL 30 — all of which overflow Basketball's fixed
-/// 1...25 range). Attendance is fanned out only to this sport's squad.
+/// Creates a match for any timed sport. Seeds period format/length from the
+/// sport's rules and caps the minutes picker at `rules.maxPeriodMinutes`.
+/// Attendance is fanned out only to this sport's squad.
 struct FixtureSetupView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -48,7 +47,7 @@ struct FixtureSetupView: View {
                     .pickerStyle(.menu)
                 }
             }
-            .navigationTitle("New Fixture")
+            .navigationTitle("New \(sport.rules.matchTerm)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// Non-Basketball equivalent of `PlayingTimeView`.
+/// Minutes played per player, reconstructed live from the substitution log.
 struct FixturePlayingTimeView: View {
     @Query private var allPlayers: [SquadPlayer]
     @Bindable var fixture: Fixture

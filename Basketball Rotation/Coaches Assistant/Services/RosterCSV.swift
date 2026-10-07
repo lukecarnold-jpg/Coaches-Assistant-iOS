@@ -7,7 +7,7 @@ nonisolated enum RosterCSV {
         let name: String
         let jerseyNumber: Int?
         // Only populated for the new-sport rosters, which have positions;
-        // Basketball's CSVs have no Position column and this stays nil.
+        // Position-less CSVs (e.g. Basketball's) leave this nil.
         let positionCode: String?
 
         init(name: String, jerseyNumber: Int? = nil, positionCode: String? = nil) {

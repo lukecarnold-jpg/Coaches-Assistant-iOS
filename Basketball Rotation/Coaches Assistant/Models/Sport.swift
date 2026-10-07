@@ -1,8 +1,8 @@
 import Foundation
 
-/// One of the sports the app can track. Basketball's own models/views never read
-/// this type — it exists only to drive Basketball's landing tile and the shared
-/// drill prompt. Everything else here backs the non-Basketball sports.
+/// One of the sports the app can track. Every timed sport (including Basketball)
+/// runs on the shared `SquadPlayer` / `Fixture` models; stats-only sports
+/// (Cricket) use their own scorecard models.
 nonisolated enum Sport: String, CaseIterable, Identifiable, Hashable, Codable {
     case basketball
     case netball
@@ -23,10 +23,6 @@ nonisolated enum Sport: String, CaseIterable, Identifiable, Hashable, Codable {
 
     var id: String { rawValue }
 
-    /// All sports except Basketball — the landing tiles show `allCases`,
-    /// but the parallel Squad/Fixture roster & game screens only ever query
-    /// for these, since Basketball keeps its own separate Player/Game models.
-    static var supported: [Sport] { allCases }
 
     var rules: SportRules {
         switch self {
@@ -49,7 +45,8 @@ nonisolated enum Sport: String, CaseIterable, Identifiable, Hashable, Codable {
                 disciplineActions: [
                     DisciplineAction(code: "foul", label: "Foul", systemImage: "hand.raised", removal: .none),
                 ],
-                positions: []
+                positions: [],
+                matchTerm: "Game"
             )
         case .netball:
             return SportRules(
@@ -525,6 +522,10 @@ nonisolated struct SportRules {
     /// True for sports recorded as a post-match scorecard (Cricket) instead of a
     /// live clock/rotation fixture.
     var isStatsOnly: Bool = false
+    /// What coaches of this sport call a match in the UI ("Game" for Basketball).
+    var matchTerm: String = "Fixture"
+
+    var matchTermPlural: String { matchTerm + "s" }
 
     var hasPositions: Bool { !positions.isEmpty }
 

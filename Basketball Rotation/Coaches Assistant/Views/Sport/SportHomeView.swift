@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// The non-Basketball equivalent of `ContentView` — same TabView/NavigationSplitView
-/// shape, scoped to one sport via `init(sport:)` so each tab's `@Query` predicate
-/// can be built correctly. `SettingsView` is reused directly since it's app-level
-/// (AI provider, appearance), not sport-scoped.
+/// Home for one sport: a TabView on iPhone and a NavigationSplitView sidebar on
+/// iPad, scoped via `init(sport:)` so each tab's `@Query` predicate can be built
+/// correctly. `SettingsView` is reused directly since it's app-level (AI provider,
+/// appearance), not sport-scoped.
 struct SportHomeView: View {
     let sport: Sport
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -23,7 +23,7 @@ struct SportHomeView: View {
                             .tabItem { Label("Stats", systemImage: "chart.bar.fill") }
                     } else {
                         NavigationStack { FixtureListView(sport: sport) }
-                            .tabItem { Label("Fixtures", systemImage: "sportscourt.fill") }
+                            .tabItem { Label(sport.rules.matchTermPlural, systemImage: "sportscourt.fill") }
                     }
 
                     NavigationStack { SportTrainingView(sport: sport) }
@@ -63,6 +63,11 @@ private struct SportSidebarNavigationView: View {
             }
         }
 
+        /// Sidebar label — the match tab uses the sport's own term ("Games").
+        func title(for sport: Sport) -> String {
+            self == .fixtures ? sport.rules.matchTermPlural : rawValue
+        }
+
         /// Stats-only sports (Cricket) record scorecards instead of live fixtures.
         static func tabs(for sport: Sport) -> [SportTab] {
             sport.rules.isStatsOnly
@@ -74,7 +79,7 @@ private struct SportSidebarNavigationView: View {
     var body: some View {
         NavigationSplitView {
             List(SportTab.tabs(for: sport), id: \.self, selection: $selectedTab) { tab in
-                Label(tab.rawValue, systemImage: tab.systemImage)
+                Label(tab.title(for: sport), systemImage: tab.systemImage)
                     .tag(tab)
             }
             .navigationTitle(sport.rules.displayName)

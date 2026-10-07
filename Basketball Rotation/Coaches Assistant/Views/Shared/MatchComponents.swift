@@ -1,8 +1,8 @@
 import SwiftUI
 import UIKit
 
-// Shared building blocks for Basketball's `GameDetailView` and every other sport's
-// `FixtureDetailView`. Each takes any `TimedMatch`, so a fix here applies to both.
+// Building blocks for `FixtureDetailView` (every timed sport). Each takes any
+// `TimedMatch`, so they stay independent of a particular model.
 
 // MARK: - Scoreboard
 
@@ -151,6 +151,15 @@ struct MatchClockSection<Match: TimedMatch>: View {
                         }
                         .buttonStyle(.bordered)
                         .accessibilityLabel("Reset clock")
+                        // Attached to the button so the iPhone popover points at it.
+                        .confirmationDialog("Reset Clock", isPresented: $showResetConfirm) {
+                            Button("Reset to \(formatClock(match.periodLengthSeconds))", role: .destructive) {
+                                onReset()
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("The clock for the \(match.periodLabel) will go back to the start. This is recorded in the event history.")
+                        }
 
                         Button {
                             showManualClock = true
@@ -177,14 +186,6 @@ struct MatchClockSection<Match: TimedMatch>: View {
                     UINotificationFeedbackGenerator().notificationOccurred(.warning)
                 }
             }
-        }
-        .confirmationDialog("Reset Clock", isPresented: $showResetConfirm) {
-            Button("Reset to \(formatClock(match.periodLengthSeconds))", role: .destructive) {
-                onReset()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("The clock for the \(match.periodLabel) will go back to the start. This is recorded in the event history.")
         }
         .sheet(isPresented: $showManualClock) {
             ManualClockView(
@@ -261,6 +262,7 @@ struct ManualClockView: View {
                     }
                 }
             }
+            .numberPadDismissal()
             .navigationTitle("Set Clock")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -396,6 +398,45 @@ struct ActionButton: View {
             .foregroundStyle(isDisabled ? color.opacity(0.4) : color)
         }
         .disabled(isDisabled)
+    }
+}
+
+// MARK: - List rows
+
+/// Row-sized button for lists and forms. On recent iOS releases the default list
+/// button style tints the whole label with the accent colour, overriding the
+/// row's own `.primary`/`.secondary` text styles so names look like links. This
+/// keeps the label's own styling, makes the full row tappable, and dims on press.
+struct ListRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .opacity(configuration.isPressed ? 0.5 : 1)
+    }
+}
+
+extension ButtonStyle where Self == ListRowButtonStyle {
+    static var listRow: ListRowButtonStyle { ListRowButtonStyle() }
+}
+
+// MARK: - Keyboard
+
+extension View {
+    /// Number pads have no return key, so add a keyboard "Done" button and let
+    /// scrolling dismiss the keyboard — otherwise it can cover the tab bar with no
+    /// way to close it.
+    func numberPadDismissal() -> some View {
+        self
+            .scrollDismissesKeyboard(.interactively)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
+                }
+            }
     }
 }
 

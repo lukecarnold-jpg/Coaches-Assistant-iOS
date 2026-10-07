@@ -62,6 +62,7 @@ struct CricketMatchSetupView: View {
                                     }
                                 }
                             }
+                            .buttonStyle(.listRow)
                             .accessibilityAddTraits(selectedIDs.contains(player.playerID) ? .isSelected : [])
                         }
                     }

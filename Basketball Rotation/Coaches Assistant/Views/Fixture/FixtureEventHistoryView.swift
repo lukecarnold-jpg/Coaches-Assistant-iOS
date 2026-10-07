@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// Non-Basketball equivalent of `EventHistoryView`.
+/// Full match event log, with edit and delete (deleting rolls back its effect).
 struct FixtureEventHistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var fixture: Fixture
@@ -18,7 +18,7 @@ struct FixtureEventHistoryView: View {
     var body: some View {
         Group {
             if fixture.events.isEmpty {
-                ContentUnavailableView("No Events", systemImage: "list.bullet.clipboard", description: Text("Events are logged as the fixture progresses."))
+                ContentUnavailableView("No Events", systemImage: "list.bullet.clipboard", description: Text("Events are logged as the \(sport.rules.matchTerm.lowercased()) progresses."))
             } else {
                 List {
                     ForEach(sortedEvents) { event in
@@ -27,7 +27,7 @@ struct FixtureEventHistoryView: View {
                                 Image(systemName: event.symbolName(for: sport))
                                     .foregroundStyle(.secondary)
                                     .frame(width: 20)
-                                Text(event.displayName(opponentName: fixture.opponentName))
+                                Text(event.displayName(opponentName: fixture.opponentName, sport: sport))
                                     .font(.subheadline.bold())
                                 if !event.playerName.isEmpty {
                                     Text("· \(event.playerName)")

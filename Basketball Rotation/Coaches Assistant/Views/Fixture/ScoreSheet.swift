@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// Rules-driven replacement for Basketball's `TeamScoreSheet`, used for both the
-/// team's own score and the opponent's — each sport's `scoringActions` list
-/// drives the point-value picker instead of a hardcoded 1/2/3.
+/// Score entry for both the team and the opponent — each sport's
+/// `scoringActions` list drives the picker (e.g. Basketball's 1/2/3).
 struct ScoreSheet: View {
     @Environment(\.dismiss) private var dismiss
     let sport: Sport
@@ -62,6 +61,7 @@ struct ScoreSheet: View {
                                         }
                                     }
                                 }
+                                .buttonStyle(.listRow)
                             }
                         }
                     } header: {

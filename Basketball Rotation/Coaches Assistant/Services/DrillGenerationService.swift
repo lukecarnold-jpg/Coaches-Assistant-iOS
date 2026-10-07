@@ -18,15 +18,6 @@ protocol DrillGenerating {
     func generateDrills(ageGroup: String, apiKey: String, sport: Sport) async throws -> [String]
 }
 
-extension DrillGenerating {
-    /// Basketball's call site (`TrainingView`) omits `sport` entirely — this
-    /// default keeps that call byte-identical rather than requiring an edit
-    /// there just to satisfy a parameter it doesn't care about.
-    func generateDrills(ageGroup: String, apiKey: String) async throws -> [String] {
-        try await generateDrills(ageGroup: ageGroup, apiKey: apiKey, sport: .basketball)
-    }
-}
-
 extension AIProvider {
     var drillService: DrillGenerating {
         switch self {

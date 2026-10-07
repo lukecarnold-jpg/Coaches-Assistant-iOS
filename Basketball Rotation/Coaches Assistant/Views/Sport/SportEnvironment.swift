@@ -27,6 +27,6 @@ extension EnvironmentValues {
     /// Only for shared leaf components (event rows, player pickers) that need
     /// terminology but not a `@Query` predicate. Query-owning views take `sport`
     /// as an explicit `init` parameter instead. The `.basketball` default is a
-    /// previews-only fallback — Basketball's own views never read this.
+    /// previews-only fallback; `SportHomeView` always injects the real sport.
     @Entry var sport: Sport = .basketball
 }

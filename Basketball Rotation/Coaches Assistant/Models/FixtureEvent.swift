@@ -54,7 +54,15 @@ final class FixtureEvent {
         sport.rules.disciplineAction(forCode: actionCode)?.systemImage ?? eventKind.systemImage
     }
 
-    func displayName(opponentName: String) -> String {
+    /// Row title: the specific discipline action ("Foul", "Yellow Card") rather
+    /// than the generic "Discipline", and "<Opponent> Score" for opponent scores.
+    func displayName(opponentName: String, sport: Sport) -> String {
+        if eventKind == .discipline, let action = sport.rules.disciplineAction(forCode: actionCode) {
+            return action.label
+        }
+        if eventKind == .fixtureEnd {
+            return "\(sport.rules.matchTerm) End"
+        }
         guard eventKind == .opponentScore, !opponentName.isEmpty else {
             return eventType
         }

@@ -108,22 +108,18 @@ Coaches Assistant/
 ├── Coaches Assistant.xcodeproj/           # Xcode project configuration
 ├── Coaches Assistant/                     # Application source code
 │   ├── CoachesAssistantApp.swift         # App entry point & SwiftData ModelContainer
-│   ├── ContentView.swift                 # Basketball navigation (TabView / SplitView)
 │   ├── Assets.xcassets/                  # Multi-sport app icons and color palettes
 │   │
 │   ├── Models/                           # SwiftData @Model schema definitions
 │   │   ├── Sport.swift                   # Sport enum, rules, scoring, discipline & positions
-│   │   ├── TimedMatch.swift              # Shared clock/period/score/playing-time logic (Game & Fixture)
+│   │   ├── TimedMatch.swift              # Clock/period/score/playing-time logic for Fixture
 │   │   ├── CricketMatch.swift            # Cricket scorecard + per-player batting/bowling/fielding
-│   │   ├── SquadPlayer.swift             # Multi-sport player entity (sport, position, jersey)
+│   │   ├── SquadPlayer.swift             # Player entity for every sport (sport, position, jersey)
 │   │   ├── Fixture.swift                 # Multi-sport match entity (periods, clock, score)
 │   │   ├── FixtureEvent.swift            # Multi-sport match event stream (score, card, sub)
 │   │   ├── FixtureAttendance.swift       # Multi-sport match attendance
 │   │   ├── FixtureLineupSlot.swift       # Multi-sport on-field position slot assignment
-│   │   ├── Player.swift                  # Basketball-specific player entity
-│   │   ├── Game.swift                    # Basketball-specific game entity
-│   │   ├── GameEvent.swift               # Basketball event stream
-│   │   └── GameAttendance.swift          # Basketball attendance
+│   │   └── Player / Game / GameEvent / GameAttendance.swift  # Legacy Basketball models, read only by the migration
 │   │
 │   ├── Services/                         # Business logic, networking, and security
 │   │   ├── AIAPIKeyStore.swift           # Observable Keychain manager for AI credentials
@@ -132,6 +128,7 @@ Coaches Assistant/
 │   │   ├── DrillGenerationService.swift  # Network implementations for Gemini, Claude, OpenAI, Custom
 │   │   ├── KeychainHelper.swift          # Security framework wrapper for generic passwords
 │   │   ├── RosterCSV.swift               # Standalone RFC-compliant CSV parser, import de-duplication
+│   │   ├── LegacyBasketballMigration.swift # One-time copy of Basketball data onto the shared models
 │   │   ├── MatchExport.swift             # Event CSV / notes builders and on-demand share files
 │   │   └── CricketSeasonStats.swift      # Season batting/bowling/fielding aggregation
 │   │
@@ -144,7 +141,7 @@ Coaches Assistant/
 │       │   └── SportEnvironment.swift    # SwiftUI environment injection for active sport
 │       │
 │       ├── Shared/
-│       │   └── MatchComponents.swift     # Scoreboard, clock, banners & notes shared by Game and Fixture
+│       │   └── MatchComponents.swift     # Scoreboard, clock, banners & notes for the match screen
 │       │
 │       ├── Cricket/                      # Stats-only cricket scorecards
 │       │   ├── CricketMatchListView.swift
@@ -154,7 +151,7 @@ Coaches Assistant/
 │       │   ├── CricketSeasonStatsView.swift
 │       │   └── CricketStatFields.swift
 │       │
-│       ├── Fixture/                      # Multi-sport fixture tracking
+│       ├── Fixture/                      # Live match screens for every timed sport (Basketball included)
 │       │   ├── FixtureListView.swift     # Active and completed fixtures list
 │       │   ├── FixtureDetailView.swift   # Main match dashboard (scoreboard, clock, field, notes)
 │       │   ├── FixtureSetupView.swift    # New fixture creation modal
@@ -166,22 +163,10 @@ Coaches Assistant/
 │       │   ├── ScoreSheet.swift          # Sport-specific scoring action modal
 │       │   └── DisciplineSheet.swift     # Sport-specific card/infraction modal
 │       │
-│       ├── Game/                         # Basketball-specific match tracking
-│       │   ├── GameListView.swift
-│       │   ├── GameDetailView.swift
-│       │   ├── GameSetupView.swift
-│       │   ├── LineupSetupView.swift
-│       │   ├── SubstitutionView.swift
-│       │   ├── AttendanceView.swift
-│       │   ├── EventHistoryView.swift
-│       │   └── PlayingTimeView.swift
-│       │
 │       ├── Roster/                       # Roster management
 │       │   ├── SquadRosterView.swift     # Multi-sport squad list, search & CSV import/export
 │       │   ├── SquadPlayerEditView.swift # Multi-sport add/edit player modal with position picker
-│       │   ├── PositionPicker.swift      # Sport-specific position selector
-│       │   ├── RosterView.swift          # Basketball roster view
-│       │   └── PlayerEditView.swift      # Basketball player edit modal
+│       │   └── PositionPicker.swift      # Sport-specific position selector
 │       │
 │       ├── Settings/                     # App settings and credentials
 │       │   ├── SettingsView.swift        # Appearance, AI provider config, selective data deletion
@@ -190,8 +175,7 @@ Coaches Assistant/
 │       │   └── DataDeletionSheet.swift   # Selective data deletion modal
 │       │
 │       └── Training/                     # AI coaching assistant
-│           ├── SportTrainingView.swift   # Multi-sport drill generator
-│           └── TrainingView.swift        # Basketball drill generator
+│           └── SportTrainingView.swift   # Drill generator for every sport
 │
 ├── Coaches AssistantTests/               # Swift Testing unit test suite
 │   ├── CoachesAssistantTests.swift      # Test suite entry
@@ -202,8 +186,8 @@ Coaches Assistant/
 │   ├── FixtureLineupSlotTests.swift     # Lineup slot assignment and validation tests
 │   ├── FixturePlayingTimeTests.swift    # Fixture playing time calculation tests
 │   ├── DrillGenerationTests.swift       # LLM response parsing and line wrapping tests
-│   ├── GameClockTests.swift             # Clock math, clamping, and period label tests
-│   ├── PlayingTimeTests.swift           # Substitution interval playing time tests
+│   ├── MatchClockTests.swift            # Clock math, clamping, and period label tests
+│   ├── LegacyBasketballMigrationTests.swift # Basketball data migration tests
 │   └── RosterCSVTests.swift             # CSV parser, column discovery, and escaping tests
 │
 └── Coaches AssistantUITests/             # XCUI automation and launch performance tests

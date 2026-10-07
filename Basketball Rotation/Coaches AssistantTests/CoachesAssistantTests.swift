@@ -5,13 +5,11 @@ struct CoachesAssistantTests {
 
     @Test func deletionTargetAllCasesCoversAllSports() {
         let cases = DeletionTarget.allCases
-        #expect(cases.contains(.basketballPlayers))
-        #expect(cases.contains(.basketballGames))
-        for sport in Sport.allCases where sport != .basketball {
+        for sport in Sport.allCases {
             #expect(cases.contains(.squadPlayers(sport)))
             #expect(cases.contains(.fixtures(sport)))
         }
-        #expect(cases.count == 2 + 2 * (Sport.allCases.count - 1))
+        #expect(cases.count == 2 * Sport.allCases.count)
     }
 
     @Test func deletionTargetIDsAreUnique() {

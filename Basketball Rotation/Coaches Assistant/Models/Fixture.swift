@@ -1,10 +1,10 @@
 import Foundation
 import SwiftData
 
-/// The non-Basketball equivalent of `Game`. Kept as a separate model so Basketball's
-/// `Game`/`GameEvent`/`GameAttendance` and every view built on them are untouched by
-/// this change. Clock, period, scoring and playing-time logic is shared with `Game`
-/// via `TimedMatch`, with `sport`-driven rules layered on top.
+/// A match for any timed sport, Basketball included. Clock, period, scoring and
+/// playing-time logic comes from `TimedMatch`, with `sport`-driven rules layered
+/// on top. Basketball's original `Game` records are copied into this model by
+/// `LegacyBasketballMigration`.
 @Model
 final class Fixture {
     var fixtureID: UUID
@@ -59,8 +59,8 @@ final class Fixture {
         self.clockStartedAt = nil
     }
 
-    /// Falls back to soccer (never Basketball, which doesn't use `Fixture`) if the
-    /// stored value is unrecognised — and flags it loudly in debug builds.
+    /// Falls back to soccer if the stored value is unrecognised (e.g. data from a
+    /// newer app version) — and flags it loudly in debug builds.
     var sportValue: Sport {
         if let value = Sport(rawValue: sport) { return value }
         assertionFailure("Fixture has unknown sport '\(sport)'")

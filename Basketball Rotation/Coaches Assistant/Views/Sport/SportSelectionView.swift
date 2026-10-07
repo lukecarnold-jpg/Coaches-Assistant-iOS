@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Landing page shown on every launch — no persisted "last sport". One tile per
-/// sport, including Basketball, which routes to its own `ContentView`.
+/// sport.
 struct SportSelectionView: View {
     let onSelect: (Sport) -> Void
 

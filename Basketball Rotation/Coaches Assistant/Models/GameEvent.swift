@@ -1,6 +1,8 @@
 import Foundation
 import SwiftData
 
+/// **Legacy.** Basketball's original event vocabulary, read only by
+/// `LegacyBasketballMigration`. Raw values are persisted — never change them.
 nonisolated enum GameEventType: String, CaseIterable {
     case substitutionIn  = "Sub In"
     case substitutionOut = "Sub Out"
@@ -11,22 +13,9 @@ nonisolated enum GameEventType: String, CaseIterable {
     case gameEnd         = "Game End"
     case note            = "Note"
     case mvpVote         = "MVP Vote"
-
-    var systemImage: String {
-        switch self {
-        case .substitutionIn:  return "arrow.down.circle"
-        case .substitutionOut: return "arrow.up.circle"
-        case .foul:            return "hand.raised"
-        case .teamScore:       return "basketball"
-        case .opponentScore:   return "basketball.fill"
-        case .periodAdvance:   return "forward.end"
-        case .gameEnd:         return "flag.checkered"
-        case .note:            return "note.text"
-        case .mvpVote:         return "star"
-        }
-    }
 }
 
+/// **Legacy, read-only.** See `Game`. Do not change stored properties.
 @Model
 final class GameEvent {
     var eventID: UUID
@@ -46,13 +35,6 @@ final class GameEvent {
     // Computed, never persisted
     var eventKind: GameEventType {
         GameEventType(rawValue: eventType) ?? .note
-    }
-
-    func displayName(opponentName: String) -> String {
-        guard eventKind == .opponentScore, !opponentName.isEmpty else {
-            return eventType
-        }
-        return "\(opponentName) Score"
     }
 
     init(game: Game?, eventType: GameEventType, playerID: UUID? = nil, playerName: String = "", detail: String = "", periodNumber: Int = 1, elapsedSeconds: Int = 0, scoreDelta: Int = 0) {

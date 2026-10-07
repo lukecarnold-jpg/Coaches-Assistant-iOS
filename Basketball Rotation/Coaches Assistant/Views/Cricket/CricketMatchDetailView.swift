@@ -55,6 +55,7 @@ struct CricketMatchDetailView: View {
                     .accessibilityLabel("Match notes")
             }
         }
+        .numberPadDismissal()
         .navigationTitle("vs \(match.opponentName)")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -130,6 +131,7 @@ struct CricketMatchDetailView: View {
                             .foregroundStyle(.primary)
                     }
                 }
+                .buttonStyle(.listRow)
                 .accessibilityElement(children: .combine)
             }
             if !notYetBatted.isEmpty {
@@ -181,6 +183,7 @@ struct CricketMatchDetailView: View {
                         }
                     }
                 }
+                .buttonStyle(.listRow)
                 .accessibilityElement(children: .combine)
             }
             if !notYetBowled.isEmpty {
@@ -214,6 +217,7 @@ struct CricketMatchDetailView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    .buttonStyle(.listRow)
                 }
             }
         }
@@ -233,6 +237,7 @@ struct CricketMatchDetailView: View {
                             .accessibilityHidden(true)
                     }
                 }
+                .buttonStyle(.listRow)
             }
             .onDelete(perform: removePlayers)
 

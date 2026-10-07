@@ -1,9 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// Non-Basketball equivalent of `LineupSetupView`. Two differences from the
-/// original: the max lineup size comes from `sport.rules.onFieldCount` instead
-/// of a hardcoded 5, and the "Set Lineup" guard allows fewer than the max
+/// Starting lineup picker. The max lineup size comes from
+/// `sport.rules.onFieldCount`, and the "Set Lineup" guard allows fewer than the max
 /// (`1...max`, not `== max`) — otherwise a send-off would make the lineup
 /// permanently un-settable, since the team is deliberately short-handed from
 /// that point on. Sent-off players are excluded from selection entirely.

@@ -40,9 +40,9 @@ nonisolated struct PlayingTimeEvent {
     let timestamp: Date
 }
 
-/// Shared clock, period, scoring and playing-time behaviour for `Game` (Basketball)
-/// and `Fixture` (every other timed sport). Both models keep their own stored
-/// properties — only the logic lives here.
+/// Clock, period, scoring and playing-time behaviour for timed matches (`Fixture`).
+/// Kept as a protocol so the logic and the shared match UI don't depend on a
+/// particular model, and can be unit tested in isolation.
 nonisolated protocol TimedMatch: AnyObject {
     var date: Date { get set }
     var opponentName: String { get set }

@@ -19,8 +19,6 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var players: [Player]
-    @Query private var games: [Game]
     @Query private var squadPlayers: [SquadPlayer]
     @Query private var fixtures: [Fixture]
     @Query private var cricketMatches: [CricketMatch]
@@ -81,29 +79,17 @@ struct SettingsView: View {
                 HStack {
                     Text("Players")
                     Spacer()
-                    Text("\(players.count)")
-                        .foregroundStyle(.secondary)
-                }
-                HStack {
-                    Text("Games")
-                    Spacer()
-                    Text("\(games.count)")
-                        .foregroundStyle(.secondary)
-                }
-                HStack {
-                    Text("Other Sports — Players")
-                    Spacer()
                     Text("\(squadPlayers.count)")
                         .foregroundStyle(.secondary)
                 }
                 HStack {
-                    Text("Other Sports — Fixtures")
+                    Text("Games & Fixtures")
                     Spacer()
                     Text("\(fixtures.count)")
                         .foregroundStyle(.secondary)
                 }
                 HStack {
-                    Text("Cricket — Matches")
+                    Text("Cricket Matches")
                     Spacer()
                     Text("\(cricketMatches.count)")
                         .foregroundStyle(.secondary)

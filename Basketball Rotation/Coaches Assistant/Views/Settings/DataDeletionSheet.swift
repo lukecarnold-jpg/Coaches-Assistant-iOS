@@ -3,17 +3,11 @@ import SwiftData
 
 /// Granular categories of data that can be selected for deletion.
 nonisolated enum DeletionTarget: Hashable, Identifiable {
-    case basketballPlayers
-    case basketballGames
     case squadPlayers(Sport)
     case fixtures(Sport)
 
     var id: String {
         switch self {
-        case .basketballPlayers:
-            return "basketball_players"
-        case .basketballGames:
-            return "basketball_games"
         case .squadPlayers(let sport):
             return "squad_players_\(sport.rawValue)"
         case .fixtures(let sport):
@@ -22,8 +16,8 @@ nonisolated enum DeletionTarget: Hashable, Identifiable {
     }
 
     static var allCases: [DeletionTarget] {
-        var targets: [DeletionTarget] = [.basketballPlayers, .basketballGames]
-        for sport in Sport.allCases where sport != .basketball {
+        var targets: [DeletionTarget] = []
+        for sport in Sport.allCases {
             targets.append(.squadPlayers(sport))
             targets.append(.fixtures(sport))
         }
@@ -36,8 +30,6 @@ struct DataDeletionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
-    @Query private var players: [Player]
-    @Query private var games: [Game]
     @Query private var squadPlayers: [SquadPlayer]
     @Query private var fixtures: [Fixture]
     @Query private var cricketMatches: [CricketMatch]
@@ -56,14 +48,12 @@ struct DataDeletionSheet: View {
     }
 
     private var totalDataCount: Int {
-        players.count + games.count + squadPlayers.count + fixtures.count + cricketMatches.count
+        squadPlayers.count + fixtures.count + cricketMatches.count
     }
 
     private var totalSelectedCount: Int {
         var count = 0
-        if selectedTargets.contains(.basketballPlayers) { count += players.count }
-        if selectedTargets.contains(.basketballGames) { count += games.count }
-        for sport in Sport.allCases where sport != .basketball {
+        for sport in Sport.allCases {
             if selectedTargets.contains(.squadPlayers(sport)) {
                 count += squadPlayers.filter { $0.sport == sport.rawValue }.count
             }
@@ -103,9 +93,7 @@ struct DataDeletionSheet: View {
                     Text("Selecting All Data will remove all players, squads, games, fixtures, cricket matches, and events on this device.")
                 }
 
-                sportSection(for: .basketball)
-
-                ForEach(Sport.allCases.filter { $0 != .basketball }) { sport in
+                ForEach(Sport.allCases) { sport in
                     sportSection(for: sport)
                 }
             }
@@ -152,35 +140,18 @@ struct DataDeletionSheet: View {
     @ViewBuilder
     private func sportSection(for sport: Sport) -> some View {
         Section {
-            if sport == .basketball {
-                targetRow(
-                    target: .basketballPlayers,
-                    title: "Players",
-                    count: players.count,
-                    icon: "person.2"
-                )
-                targetRow(
-                    target: .basketballGames,
-                    title: "Games & History",
-                    count: games.count,
-                    icon: "clock.arrow.circlepath"
-                )
-            } else {
-                let sportSquad = squadPlayers.filter { $0.sport == sport.rawValue }
-
-                targetRow(
-                    target: .squadPlayers(sport),
-                    title: "Squad Players",
-                    count: sportSquad.count,
-                    icon: "person.2"
-                )
-                targetRow(
-                    target: .fixtures(sport),
-                    title: sport.rules.isStatsOnly ? "Matches & Stats" : "Fixtures & History",
-                    count: matchCount(for: sport),
-                    icon: "clock.arrow.circlepath"
-                )
-            }
+            targetRow(
+                target: .squadPlayers(sport),
+                title: "Players",
+                count: squadPlayers.filter { $0.sport == sport.rawValue }.count,
+                icon: "person.2"
+            )
+            targetRow(
+                target: .fixtures(sport),
+                title: sport.rules.isStatsOnly ? "Matches & Stats" : "\(sport.rules.matchTermPlural) & History",
+                count: matchCount(for: sport),
+                icon: "clock.arrow.circlepath"
+            )
         } header: {
             HStack {
                 Label(sport.rules.displayName, systemImage: sport.rules.systemImage)
@@ -224,11 +195,7 @@ struct DataDeletionSheet: View {
     }
 
     private func sportTargets(for sport: Sport) -> [DeletionTarget] {
-        if sport == .basketball {
-            return [.basketballPlayers, .basketballGames]
-        } else {
-            return [.squadPlayers(sport), .fixtures(sport)]
-        }
+        [.squadPlayers(sport), .fixtures(sport)]
     }
 
     private func toggleSport(_ sport: Sport) {
@@ -263,36 +230,23 @@ struct DataDeletionSheet: View {
     private func performDeletion() {
         do {
             if isAllSelected {
-                try modelContext.delete(model: GameEvent.self)
-                try modelContext.delete(model: GameAttendance.self)
-                try modelContext.delete(model: Game.self)
-                try modelContext.delete(model: Player.self)
-                try modelContext.delete(model: FixtureLineupSlot.self)
-                try modelContext.delete(model: FixtureEvent.self)
-                try modelContext.delete(model: FixtureAttendance.self)
-                try modelContext.delete(model: Fixture.self)
-                try modelContext.delete(model: SquadPlayer.self)
-                try modelContext.delete(model: CricketPlayerStats.self)
-                try modelContext.delete(model: CricketMatch.self)
+                // Deleting parents cascades to their events, attendance, lineup
+                // slots and stat lines. Batch deletes can't be used here: they
+                // fail on models with inverse relationships.
+                try LegacyBasketballMigration.deleteLegacyData(in: modelContext, players: true, games: true)
+                try modelContext.deleteEach(Fixture.self)
+                try modelContext.deleteEach(SquadPlayer.self)
+                try modelContext.deleteEach(CricketMatch.self)
             } else {
-                if selectedTargets.contains(.basketballGames) {
-                    for game in games {
-                        for event in game.events {
-                            modelContext.delete(event)
-                        }
-                        for attendance in game.attendances {
-                            modelContext.delete(attendance)
-                        }
-                        modelContext.delete(game)
-                    }
-                }
-                if selectedTargets.contains(.basketballPlayers) {
-                    for player in players {
-                        modelContext.delete(player)
-                    }
-                }
+                // The pre-migration Basketball originals are kept as a fallback;
+                // remove them too so deleted Basketball data doesn't linger.
+                try LegacyBasketballMigration.deleteLegacyData(
+                    in: modelContext,
+                    players: selectedTargets.contains(.squadPlayers(.basketball)),
+                    games: selectedTargets.contains(.fixtures(.basketball))
+                )
 
-                for sport in Sport.allCases where sport != .basketball {
+                for sport in Sport.allCases {
                     if sport.rules.isStatsOnly, selectedTargets.contains(.fixtures(sport)) {
                         for match in cricketMatches {
                             for line in match.playerStats {

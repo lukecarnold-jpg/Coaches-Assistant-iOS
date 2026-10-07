@@ -90,6 +90,7 @@ struct CricketPlayerStatsEditView: View {
                     CricketStatField(title: "Stumpings", value: $stats.stumpings, range: 0...20)
                 }
             }
+            .numberPadDismissal()
             .navigationTitle(stats.playerName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

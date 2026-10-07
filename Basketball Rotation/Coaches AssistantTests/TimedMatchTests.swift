@@ -3,7 +3,7 @@ import Foundation
 import SwiftData
 @testable import Coaches_Assistant
 
-/// Covers the clock/period/score logic shared by `Game` and `Fixture` via `TimedMatch`.
+/// Covers the clock/period/score logic `Fixture` gets from `TimedMatch`.
 @MainActor
 struct TimedMatchTests {
     private func makeContext() throws -> ModelContext {
@@ -19,7 +19,7 @@ struct TimedMatchTests {
     // MARK: - Clock
 
     @Test func runningClockIsCappedAtPeriodLength() {
-        let game = Game(opponentName: "Wildcats", periodFormat: "quarters", periodLengthMinutes: 10)
+        let game = Fixture(sport: .basketball, opponentName: "Wildcats", periodFormat: "quarters", periodLengthMinutes: 10)
         game.clockIsRunning = true
         game.clockStartedAt = Date().addingTimeInterval(-900) // 15 min ago, 10 min period
         #expect(game.currentElapsedSeconds() == 600)
@@ -27,7 +27,7 @@ struct TimedMatchTests {
     }
 
     @Test func stopClockPersistsCappedElapsed() {
-        let game = Game(opponentName: "Wildcats", periodFormat: "quarters", periodLengthMinutes: 10)
+        let game = Fixture(sport: .basketball, opponentName: "Wildcats", periodFormat: "quarters", periodLengthMinutes: 10)
         game.clockIsRunning = true
         game.clockStartedAt = Date().addingTimeInterval(-900)
         game.stopClock()
@@ -37,14 +37,14 @@ struct TimedMatchTests {
     }
 
     @Test func startClockRefusesOnceExpired() {
-        let game = Game(opponentName: "Wildcats", periodFormat: "quarters", periodLengthMinutes: 10)
+        let game = Fixture(sport: .basketball, opponentName: "Wildcats", periodFormat: "quarters", periodLengthMinutes: 10)
         game.elapsedSeconds = 600
         game.startClock()
         #expect(game.clockIsRunning == false)
     }
 
     @Test func manualTimeIsValidatedAndClamped() {
-        let game = Game(opponentName: "Wildcats", periodFormat: "quarters", periodLengthMinutes: 10)
+        let game = Fixture(sport: .basketball, opponentName: "Wildcats", periodFormat: "quarters", periodLengthMinutes: 10)
         #expect(game.isValidRemainingTime(minutes: 5, seconds: 30))
         #expect(!game.isValidRemainingTime(minutes: 5, seconds: 75))
         #expect(!game.isValidRemainingTime(minutes: 11, seconds: 0))
@@ -59,7 +59,7 @@ struct TimedMatchTests {
 
     @Test func playingTimeIgnoresClockOverrun() {
         // Clock left running 5 minutes past the end of Q1 must not credit extra time.
-        let game = Game(opponentName: "Wildcats", periodFormat: "quarters", periodLengthMinutes: 10)
+        let game = Fixture(sport: .basketball, opponentName: "Wildcats", periodFormat: "quarters", periodLengthMinutes: 10)
         let a = UUID()
         game.startingLineupIDs = [a.uuidString]
         game.clockIsRunning = true
@@ -68,17 +68,17 @@ struct TimedMatchTests {
     }
 
     @Test func storedEventElapsedBeyondPeriodIsClamped() {
-        let game = Game(opponentName: "Wildcats", periodFormat: "quarters", periodLengthMinutes: 10)
+        let game = Fixture(sport: .basketball, opponentName: "Wildcats", periodFormat: "quarters", periodLengthMinutes: 10)
         let a = UUID()
         game.startingLineupIDs = [a.uuidString]
-        game.events.append(GameEvent(game: game, eventType: .substitutionOut, playerID: a, periodNumber: 1, elapsedSeconds: 750))
+        game.events.append(FixtureEvent(fixture: game, eventType: .substitutionOut, playerID: a, periodNumber: 1, elapsedSeconds: 750))
         #expect(game.minutesPlayedSeconds()[a] == 600)
     }
 
     // MARK: - Periods
 
     @Test func overtimeLabels() {
-        let quarters = Game(opponentName: "A", periodFormat: "quarters", periodLengthMinutes: 10)
+        let quarters = Fixture(sport: .basketball, opponentName: "A", periodFormat: "quarters", periodLengthMinutes: 10)
         #expect(quarters.periodLabel(forPeriod: 5) == "OT 1")
         #expect(quarters.periodLabel(forPeriod: 6) == "OT 2")
         #expect(quarters.shortPeriodLabel(forPeriod: 3) == "Q3")
@@ -93,7 +93,7 @@ struct TimedMatchTests {
 
     @Test func advancingPastRegulationEntersOvertime() throws {
         let context = try makeContext()
-        let game = Game(opponentName: "Wildcats", periodFormat: "halves", periodLengthMinutes: 20)
+        let game = Fixture(sport: .basketball, opponentName: "Wildcats", periodFormat: "halves", periodLengthMinutes: 20)
         context.insert(game)
         game.currentPeriod = 2
         game.elapsedSeconds = 1200
@@ -105,24 +105,24 @@ struct TimedMatchTests {
         #expect(game.events.last?.eventKind == .periodAdvance)
     }
 
-    @Test func endGameStopsClockAndClearsGameDayMode() throws {
+    @Test func endingStopsClockAndClearsGameDayMode() throws {
         let context = try makeContext()
-        let game = Game(opponentName: "Wildcats", periodFormat: "quarters", periodLengthMinutes: 10)
+        let game = Fixture(sport: .basketball, opponentName: "Wildcats", periodFormat: "quarters", periodLengthMinutes: 10)
         context.insert(game)
         game.clockIsRunning = true
         game.clockStartedAt = Date().addingTimeInterval(-30)
-        game.endGame(in: context)
+        game.endFixture(in: context)
         #expect(game.isEnded)
         #expect(game.isGameDayModeActive == false)
         #expect(game.clockIsRunning == false)
-        #expect(game.events.last?.eventKind == .gameEnd)
+        #expect(game.events.last?.eventKind == .fixtureEnd)
     }
 
     // MARK: - Score
 
     @Test func decrementAtZeroLogsNothing() throws {
         let context = try makeContext()
-        let game = Game(opponentName: "Wildcats", periodFormat: "quarters", periodLengthMinutes: 10)
+        let game = Fixture(sport: .basketball, opponentName: "Wildcats", periodFormat: "quarters", periodLengthMinutes: 10)
         context.insert(game)
         game.adjustScore(team: true, delta: -1, in: context)
         game.adjustScore(team: false, delta: -1, in: context)
@@ -133,7 +133,7 @@ struct TimedMatchTests {
 
     @Test func opponentScoreAcceptsMultiPointBaskets() throws {
         let context = try makeContext()
-        let game = Game(opponentName: "Wildcats", periodFormat: "quarters", periodLengthMinutes: 10)
+        let game = Fixture(sport: .basketball, opponentName: "Wildcats", periodFormat: "quarters", periodLengthMinutes: 10)
         context.insert(game)
         game.adjustScore(team: false, delta: 3, in: context)
         #expect(game.opponentScore == 3)
@@ -142,7 +142,7 @@ struct TimedMatchTests {
 
     @Test func resetClockIsRecordedInHistory() throws {
         let context = try makeContext()
-        let game = Game(opponentName: "Wildcats", periodFormat: "quarters", periodLengthMinutes: 10)
+        let game = Fixture(sport: .basketball, opponentName: "Wildcats", periodFormat: "quarters", periodLengthMinutes: 10)
         context.insert(game)
         game.elapsedSeconds = 300
         game.resetClock(in: context)
@@ -162,7 +162,7 @@ struct TimedMatchTests {
     }
 
     @Test func gameDayModeDefaultsOnForNewMatches() {
-        #expect(Game(opponentName: "A", periodFormat: "quarters", periodLengthMinutes: 10).isGameDayModeActive)
+        #expect(Fixture(sport: .basketball, opponentName: "A", periodFormat: "quarters", periodLengthMinutes: 10).isGameDayModeActive)
         #expect(Fixture(sport: .netball, opponentName: "B", periodFormat: "quarters", periodLengthMinutes: 15).isGameDayModeActive)
     }
 

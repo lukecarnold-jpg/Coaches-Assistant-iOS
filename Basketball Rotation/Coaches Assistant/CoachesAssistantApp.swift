@@ -59,7 +59,9 @@ struct CoachesAssistantApp: App {
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: isUITesting)
 
         do {
-            return try ModelContainer(for: schema, configurations: [config])
+            let container = try ModelContainer(for: schema, configurations: [config])
+            LegacyBasketballMigration.migrateIfNeeded(context: container.mainContext)
+            return container
         } catch {
             // If the store is corrupt or schema-incompatible, move it aside rather
             // than delete it — a failed migration should never silently destroy a

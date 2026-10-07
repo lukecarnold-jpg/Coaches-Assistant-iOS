@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// Non-Basketball equivalent of `GameListView`. Replaces the Phase 1 placeholder.
+/// List of a sport's matches ("Games" for Basketball, "Fixtures" elsewhere).
 struct FixtureListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var fixtures: [Fixture]
@@ -19,7 +19,7 @@ struct FixtureListView: View {
     var body: some View {
         Group {
             if fixtures.isEmpty {
-                ContentUnavailableView("No Fixtures", systemImage: "sportscourt", description: Text("Create a fixture to start tracking."))
+                ContentUnavailableView("No \(sport.rules.matchTermPlural)", systemImage: "sportscourt", description: Text("Create a \(sport.rules.matchTerm.lowercased()) to start tracking."))
             } else {
                 List {
                     ForEach(fixtures) { fixture in
@@ -31,13 +31,13 @@ struct FixtureListView: View {
                 }
             }
         }
-        .navigationTitle("Fixtures")
+        .navigationTitle(sport.rules.matchTermPlural)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showNewFixture = true } label: {
                     Image(systemName: "plus")
                 }
-                .accessibilityLabel("New fixture")
+                .accessibilityLabel("New \(sport.rules.matchTerm.lowercased())")
             }
         }
         .sheet(isPresented: $showNewFixture) {

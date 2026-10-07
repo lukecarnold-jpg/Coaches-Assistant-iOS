@@ -1,13 +1,11 @@
 import SwiftUI
 import SwiftData
 
-/// Non-Basketball equivalent of `GameDetailView`. Reuses `ActionButton` and
-/// `ManualClockView` (both sport-agnostic, defined alongside Basketball's
-/// `GameDetailView`) unchanged. The scoreboard's "+" buttons open the
-/// rules-driven `ScoreSheet` for both team and opponent instead of a
-/// hardcoded 1/2/3 picker, and "Foul" becomes "Discipline", wired through
-/// `DisciplineSheet` with sin-bin/send-off removal handled by `Fixture.logDiscipline`.
-/// Scoreboard, clock, banners and notes are the shared `MatchComponents`.
+/// Live match screen for every timed sport, Basketball included. The scoreboard's
+/// "+" buttons open the rules-driven `ScoreSheet` for both teams, and discipline
+/// runs through `DisciplineSheet`, with sin-bin/send-off removal handled by
+/// `Fixture.logDiscipline`. Scoreboard, clock, banners and notes are the shared
+/// `MatchComponents`.
 struct FixtureDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var allPlayers: [SquadPlayer]
@@ -80,7 +78,9 @@ struct FixtureDetailView: View {
                 if hasNoSubstitutesAvailable {
                     NoSubstitutesBanner(availableCount: eligiblePlayers.count, requiredCount: rules.onFieldCount)
                 }
-                actionsSection
+                if !fixture.isEnded {
+                    actionsSection
+                }
                 onFieldSection
                 CoachingNotesSection(text: $fixture.notes)
                 recentEventsSection(recentEvents)
@@ -157,48 +157,58 @@ struct FixtureDetailView: View {
                 fixture.logScore(team: false, action: action, player: nil, in: modelContext)
             }
         }
-        .confirmationDialog("Advance Period", isPresented: $showAdvancePeriodConfirm) {
-            Button("Advance to \(fixture.periodLabel(forPeriod: fixture.currentPeriod + 1))") {
-                fixture.advancePeriod(in: modelContext)
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(fixture.currentPeriod >= fixture.totalPeriods
-                 ? "Regulation time is over. This starts an overtime period."
-                 : "This will end the current period and start the next one.")
-        }
-        .confirmationDialog("End Fixture", isPresented: $showEndFixtureConfirm) {
-            Button("End Fixture", role: .destructive) {
-                fixture.endFixture(in: modelContext)
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Final score: \(fixture.teamScore) – \(fixture.opponentScore)")
-        }
     }
 
     // MARK: - Actions Section
 
     var actionsSection: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 105), spacing: 12)], spacing: 12) {
-            if !fixture.isEnded {
-                ActionButton(title: "Discipline", icon: "flag.fill", color: .red) {
-                    showDisciplineSheet = true
+            ActionButton(title: disciplineButtonTitle, icon: disciplineButtonIcon, color: .red) {
+                showDisciplineSheet = true
+            }
+            ActionButton(title: "MVP Vote", icon: "star.fill", color: .yellow) {
+                showMVPPicker = true
+            }
+            ActionButton(title: "Sub", icon: "arrow.left.arrow.right", color: .purple, isDisabled: hasNoSubstitutesAvailable) {
+                showSubstitution = true
+            }
+            ActionButton(title: fixture.currentPeriod >= fixture.totalPeriods ? "Overtime" : "Next Period", icon: "forward.end.fill", color: .blue) {
+                showAdvancePeriodConfirm = true
+            }
+            // Dialogs are attached to their buttons so the iPhone popover
+            // points at the button that opened it.
+            .confirmationDialog("Advance Period", isPresented: $showAdvancePeriodConfirm) {
+                Button("Advance to \(fixture.periodLabel(forPeriod: fixture.currentPeriod + 1))") {
+                    fixture.advancePeriod(in: modelContext)
                 }
-                ActionButton(title: "MVP Vote", icon: "star.fill", color: .yellow) {
-                    showMVPPicker = true
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(fixture.currentPeriod >= fixture.totalPeriods
+                     ? "Regulation time is over. This starts an overtime period."
+                     : "This will end the current period and start the next one.")
+            }
+            ActionButton(title: "End \(rules.matchTerm)", icon: "flag.checkered", color: .gray) {
+                showEndFixtureConfirm = true
+            }
+            .confirmationDialog("End \(rules.matchTerm)", isPresented: $showEndFixtureConfirm) {
+                Button("End \(rules.matchTerm)", role: .destructive) {
+                    fixture.endFixture(in: modelContext)
                 }
-                ActionButton(title: "Sub", icon: "arrow.left.arrow.right", color: .purple, isDisabled: hasNoSubstitutesAvailable) {
-                    showSubstitution = true
-                }
-                ActionButton(title: fixture.currentPeriod >= fixture.totalPeriods ? "Overtime" : "Next Period", icon: "forward.end.fill", color: .blue) {
-                    showAdvancePeriodConfirm = true
-                }
-                ActionButton(title: "End Fixture", icon: "flag.checkered", color: .gray) {
-                    showEndFixtureConfirm = true
-                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Final score: \(fixture.teamScore) – \(fixture.opponentScore)")
             }
         }
+    }
+
+    /// Sports with a single discipline action (Basketball's "Foul") name the
+    /// button after it; others get the generic "Discipline".
+    private var disciplineButtonTitle: String {
+        rules.disciplineActions.count == 1 ? rules.disciplineActions[0].label : "Discipline"
+    }
+
+    private var disciplineButtonIcon: String {
+        rules.disciplineActions.count == 1 ? rules.disciplineActions[0].systemImage : "flag.fill"
     }
 
     // MARK: - On Field Section
@@ -283,7 +293,7 @@ struct FixtureDetailView: View {
             MatchExport.EventRow(
                 period: fixture.shortPeriodLabel(forPeriod: event.periodNumber),
                 time: formatClock(event.elapsedSeconds),
-                event: event.displayName(opponentName: fixture.opponentName),
+                event: event.displayName(opponentName: fixture.opponentName, sport: sport),
                 player: event.playerName,
                 detail: event.detail
             )
@@ -297,7 +307,7 @@ struct FixtureDetailView: View {
     private var notesExport: TextExportFile {
         TextExportFile(
             filename: MatchExport.filename(prefix: "\(exportPrefix)_Notes", opponentName: fixture.opponentName, ext: "txt"),
-            content: MatchExport.notesText(title: "Fixture Notes", opponentName: fixture.opponentName, date: fixture.date, notes: fixture.notes)
+            content: MatchExport.notesText(title: "\(rules.matchTerm) Notes", opponentName: fixture.opponentName, date: fixture.date, notes: fixture.notes)
         )
     }
 }
@@ -308,6 +318,10 @@ struct FixtureEventRowView: View {
     let event: FixtureEvent
     let sport: Sport
 
+    private var title: String {
+        event.displayName(opponentName: event.fixture?.opponentName ?? "", sport: sport)
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: event.symbolName(for: sport))
@@ -317,7 +331,7 @@ struct FixtureEventRowView: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
-                    Text(event.displayName(opponentName: event.fixture?.opponentName ?? ""))
+                    Text(title)
                         .font(.caption.bold())
                     if !event.playerName.isEmpty {
                         Text("· \(event.playerName)")
@@ -325,7 +339,8 @@ struct FixtureEventRowView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                if !event.detail.isEmpty {
+                // Skip the detail when it just repeats the title (e.g. "Foul").
+                if !event.detail.isEmpty && event.detail != title {
                     Text(event.detail)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
@@ -357,6 +372,7 @@ private struct SquadPlayerPickerSheet: View {
                     Text(player.displayName)
                         .foregroundStyle(.primary)
                 }
+                .buttonStyle(.listRow)
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)

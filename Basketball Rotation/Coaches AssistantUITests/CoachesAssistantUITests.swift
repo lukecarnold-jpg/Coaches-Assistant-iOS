@@ -58,6 +58,7 @@ final class CoachesAssistantUITests: XCTestCase {
         opponentField.typeText("Wildcats")
         app.navigationBars.buttons["Create"].tap()
 
+        XCTAssertTrue(app.staticTexts["vs Wildcats"].firstMatch.waitForExistence(timeout: 5))
         app.staticTexts["vs Wildcats"].firstMatch.tap()
 
         // Starting lineup: first five players.
@@ -68,11 +69,12 @@ final class CoachesAssistantUITests: XCTestCase {
         app.navigationBars.buttons["Set Lineup"].tap()
         XCTAssertTrue(app.staticTexts["On Court"].waitForExistence(timeout: 5))
 
-        // Team scores 3, opponent scores 2.
+        // Team hits a 3-pointer, opponent makes a field goal.
         app.buttons["Add score for our team"].tap()
-        app.buttons["3 pts"].tap()
+        app.buttons["3-Pointer (3)"].tap()
         app.navigationBars.buttons["Log +3"].tap()
         app.buttons["Add score for Wildcats"].tap()
+        app.buttons["Field Goal (2)"].tap()
         app.navigationBars.buttons["Log +2"].tap()
 
         XCTAssertTrue(app.staticTexts["US score 3"].waitForExistence(timeout: 5))

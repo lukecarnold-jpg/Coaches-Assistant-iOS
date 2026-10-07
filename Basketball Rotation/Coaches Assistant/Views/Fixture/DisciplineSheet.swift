@@ -56,11 +56,12 @@ struct DisciplineSheet: View {
                                     }
                                 }
                             }
+                            .buttonStyle(.listRow)
                         }
                     }
                 }
             }
-            .navigationTitle("Discipline")
+            .navigationTitle(sport.rules.disciplineActions.count == 1 ? sport.rules.disciplineActions[0].label : "Discipline")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

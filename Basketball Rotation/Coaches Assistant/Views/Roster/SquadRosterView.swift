@@ -2,9 +2,8 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 
-/// Non-Basketball equivalent of `RosterView`, scoped to one sport. Shares
-/// `RosterCSV` with Basketball — the position column is additive and
-/// Basketball's CSVs never carry it.
+/// Roster for one sport, with search and CSV import/export. The Position column
+/// is optional, so position-less (e.g. Basketball) CSVs import unchanged.
 struct SquadRosterView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var players: [SquadPlayer]
@@ -63,6 +62,7 @@ struct SquadRosterView: View {
                                     .font(.caption)
                             }
                         }
+                        .buttonStyle(.listRow)
                     }
                     .onDelete(perform: deletePlayers)
                 }
