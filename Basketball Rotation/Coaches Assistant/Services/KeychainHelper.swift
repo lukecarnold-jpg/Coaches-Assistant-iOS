@@ -3,20 +3,31 @@ import Security
 
 /// Minimal wrapper around the Keychain generic-password APIs for storing small secrets on-device.
 enum KeychainHelper {
-    static func save(_ value: String, account: String, service: String) {
+    /// Saves (or, for an empty value, removes) a secret. Returns false if the Keychain
+    /// rejected the write, so callers don't report a key as saved when it isn't.
+    @discardableResult
+    static func save(_ value: String, account: String, service: String) -> Bool {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
-        SecItemDelete(query as CFDictionary)
+        let deleteStatus = SecItemDelete(query as CFDictionary)
+        guard deleteStatus == errSecSuccess || deleteStatus == errSecItemNotFound else {
+            print("Keychain delete failed for \(account): \(deleteStatus)")
+            return false
+        }
 
-        guard !value.isEmpty else { return }
+        guard !value.isEmpty else { return true }
 
         var attributes = query
         attributes[kSecValueData as String] = Data(value.utf8)
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        SecItemAdd(attributes as CFDictionary, nil)
+        let addStatus = SecItemAdd(attributes as CFDictionary, nil)
+        if addStatus != errSecSuccess {
+            print("Keychain add failed for \(account): \(addStatus)")
+        }
+        return addStatus == errSecSuccess
     }
 
     static func read(account: String, service: String) -> String {

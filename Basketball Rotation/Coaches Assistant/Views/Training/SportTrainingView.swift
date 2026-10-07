@@ -1,8 +1,6 @@
 import SwiftUI
 
-/// Non-Basketball equivalent of `TrainingView`. Replaces the Phase 1 placeholder.
-/// Passes `sport` through to `generateDrills`, which Basketball's own call site
-/// never does (it relies on the `.basketball` default on `DrillGenerating`).
+/// AI drill generator for any sport; the sport drives the prompt's terminology.
 struct SportTrainingView: View {
     let sport: Sport
 

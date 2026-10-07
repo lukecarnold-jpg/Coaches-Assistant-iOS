@@ -1,9 +1,9 @@
 import Foundation
 
-/// One of the sports the app can track. Basketball's own models/views never read
-/// this type — it exists only to drive Basketball's landing tile and the shared
-/// drill prompt. Everything else here backs the non-Basketball sports.
-enum Sport: String, CaseIterable, Identifiable, Hashable, Codable {
+/// One of the sports the app can track. Every timed sport (including Basketball)
+/// runs on the shared `SquadPlayer` / `Fixture` models; stats-only sports
+/// (Cricket) use their own scorecard models.
+nonisolated enum Sport: String, CaseIterable, Identifiable, Hashable, Codable {
     case basketball
     case netball
     case soccer
@@ -19,13 +19,10 @@ enum Sport: String, CaseIterable, Identifiable, Hashable, Codable {
     case futsal
     case volleyball
     case touchFootball
+    case cricket
 
     var id: String { rawValue }
 
-    /// All sports except Basketball — the landing tiles show `allCases`,
-    /// but the parallel Squad/Fixture roster & game screens only ever query
-    /// for these, since Basketball keeps its own separate Player/Game models.
-    static var supported: [Sport] { allCases }
 
     var rules: SportRules {
         switch self {
@@ -48,7 +45,8 @@ enum Sport: String, CaseIterable, Identifiable, Hashable, Codable {
                 disciplineActions: [
                     DisciplineAction(code: "foul", label: "Foul", systemImage: "hand.raised", removal: .none),
                 ],
-                positions: []
+                positions: [],
+                matchTerm: "Game"
             )
         case .netball:
             return SportRules(
@@ -446,25 +444,53 @@ enum Sport: String, CaseIterable, Identifiable, Hashable, Codable {
                     Position(code: "WNG", name: "Wing"),
                 ]
             )
+        case .cricket:
+            // Stats-only: no clock, rotations or substitutions. Matches are recorded
+            // as scorecards (`CricketMatch`) rather than `Fixture`s, so the period
+            // fields below are placeholders that nothing reads.
+            return SportRules(
+                displayName: "Cricket",
+                systemImage: "figure.cricket",
+                onFieldCount: 11,
+                periodFormat: "halves",
+                periodCount: 2,
+                defaultPeriodMinutes: 20,
+                maxPeriodMinutes: 50,
+                onFieldTerm: "Playing XI",
+                drillNoun: "cricket",
+                scoringActions: [
+                    ScoringAction(code: "run", label: "Run", points: 1),
+                    ScoringAction(code: "four", label: "Four", points: 4),
+                    ScoringAction(code: "six", label: "Six", points: 6),
+                ],
+                disciplineActions: [],
+                positions: [
+                    Position(code: "BAT", name: "Batter"),
+                    Position(code: "BWL", name: "Bowler"),
+                    Position(code: "AR", name: "All-Rounder"),
+                    Position(code: "WK", name: "Wicketkeeper"),
+                ],
+                isStatsOnly: true
+            )
         }
     }
 }
 
 /// How a discipline action removes a player from play.
-enum Removal: Hashable {
+nonisolated enum Removal: Hashable {
     case none
     case temporary(seconds: Int)
     case permanent
 }
 
-struct ScoringAction: Identifiable, Hashable {
+nonisolated struct ScoringAction: Identifiable, Hashable {
     let code: String
     let label: String
     let points: Int
     var id: String { code }
 }
 
-struct DisciplineAction: Identifiable, Hashable {
+nonisolated struct DisciplineAction: Identifiable, Hashable {
     let code: String
     let label: String
     let systemImage: String
@@ -472,7 +498,7 @@ struct DisciplineAction: Identifiable, Hashable {
     var id: String { code }
 }
 
-struct Position: Identifiable, Hashable {
+nonisolated struct Position: Identifiable, Hashable {
     let code: String
     let name: String
     var id: String { code }
@@ -480,7 +506,7 @@ struct Position: Identifiable, Hashable {
 
 /// Per-sport configuration: squad size, period structure, terminology, scoring,
 /// discipline vocabulary and (optional) on-field positions.
-struct SportRules {
+nonisolated struct SportRules {
     let displayName: String
     let systemImage: String
     let onFieldCount: Int
@@ -493,6 +519,13 @@ struct SportRules {
     let scoringActions: [ScoringAction]
     let disciplineActions: [DisciplineAction]
     let positions: [Position]
+    /// True for sports recorded as a post-match scorecard (Cricket) instead of a
+    /// live clock/rotation fixture.
+    var isStatsOnly: Bool = false
+    /// What coaches of this sport call a match in the UI ("Game" for Basketball).
+    var matchTerm: String = "Fixture"
+
+    var matchTermPlural: String { matchTerm + "s" }
 
     var hasPositions: Bool { !positions.isEmpty }
 

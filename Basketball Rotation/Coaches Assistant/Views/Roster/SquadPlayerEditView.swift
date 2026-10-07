@@ -1,8 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// Non-Basketball equivalent of `PlayerEditView`, with an optional position field
-/// for sports that have one.
+/// Add/edit a roster player, with an optional position field for sports that
+/// have positions.
 struct SquadPlayerEditView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -46,6 +46,7 @@ struct SquadPlayerEditView: View {
                     }
                 }
             }
+            .numberPadDismissal()
             .navigationTitle(isEditing ? "Edit Player" : "Add Player")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 
+/// **Legacy, read-only.** See `Game`. Do not change stored properties.
 @Model
 final class GameAttendance {
     var attendanceID: UUID

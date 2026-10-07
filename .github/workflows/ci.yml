@@ -2,19 +2,35 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ["**"]
   pull_request:
     branches: [main]
   workflow_dispatch:
 
+# A newer push to the same branch/PR cancels the run in progress.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   test:
-    name: Build & Test
+    name: ${{ matrix.name }}
     runs-on: macos-latest
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Unit tests
+            suite: unit
+            only-testing: "Coaches AssistantTests"
+            skip-testing: ""
+          - name: UI tests
+            suite: ui
+            only-testing: "Coaches AssistantUITests"
+            # Launch-time measurement is too noisy on shared runners to be useful.
+            skip-testing: "Coaches AssistantUITests/CoachesAssistantUITests/testLaunchPerformance"
 
     defaults:
       run:
@@ -24,17 +40,51 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show Xcode version
-        run: xcodebuild -version
+      # The app targets iOS 26.5 with Swift 6, so use the newest Xcode on the
+      # runner and stop early with a clear message if it's too old.
+      - name: Select latest Xcode
+        run: |
+          LATEST_XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)
+          sudo xcode-select -s "$LATEST_XCODE"
+          xcodebuild -version
+          MAJOR=$(xcodebuild -version | head -n 1 | sed -E 's/Xcode ([0-9]+).*/\1/')
+          if [ "$MAJOR" -lt 26 ]; then
+            echo "::error::Xcode 26 or newer is required (found $(xcodebuild -version | head -n 1))."
+            exit 1
+          fi
 
-      - name: Build and test
+      # Pick an available iPhone simulator on the newest iOS runtime at run time,
+      # instead of hard-coding a model name that disappears when the image updates.
+      - name: Pick simulator
+        id: simulator
+        run: |
+          UDID=$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)["devices"]
+          runtimes = sorted((r for r in data if "iOS" in r), reverse=True)
+          for runtime in runtimes:
+              for device in data[runtime]:
+                  if device["name"].startswith("iPhone"):
+                      print(device["udid"]); sys.exit(0)
+          sys.exit("No available iPhone simulator")
+          ')
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl list devices available | grep "$UDID"
+
+      - name: Build and test (${{ matrix.suite }})
         run: |
           set -o pipefail
+          SKIP_ARGS=()
+          if [ -n "${{ matrix.skip-testing }}" ]; then
+            SKIP_ARGS=(-skip-testing:"${{ matrix.skip-testing }}")
+          fi
           xcodebuild test \
             -project "Coaches Assistant.xcodeproj" \
             -scheme "Coaches Assistant" \
-            -destination "platform=iOS Simulator,name=iPhone 16 Pro" \
-            -resultBundlePath "$PWD/TestResults.xcresult" \
+            -destination "id=${{ steps.simulator.outputs.udid }}" \
+            -only-testing:"${{ matrix.only-testing }}" \
+            "${SKIP_ARGS[@]}" \
+            -resultBundlePath "$PWD/TestResults-${{ matrix.suite }}.xcresult" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
 
@@ -42,6 +92,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
-          path: "Basketball Rotation/TestResults.xcresult"
+          name: test-results-${{ matrix.suite }}
+          path: "Basketball Rotation/TestResults-${{ matrix.suite }}.xcresult"
           if-no-files-found: ignore

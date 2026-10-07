@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// Slim header (sport name + back chevron) wrapped around any sport home,
-/// including Basketball's untouched `ContentView()`. This is how a "Change Sport"
-/// affordance exists at all without editing `ContentView` — the header sits above
-/// it rather than inside it, so Basketball's own navigation is untouched.
+/// Slim header (sport name + back chevron) wrapped around any sport home, giving
+/// every sport a "Change Sport" affordance. It sits above the home's own
+/// TabView/NavigationSplitView rather than inside it.
 struct SportChrome<Content: View>: View {
     let sport: Sport
     let onChangeSport: () -> Void

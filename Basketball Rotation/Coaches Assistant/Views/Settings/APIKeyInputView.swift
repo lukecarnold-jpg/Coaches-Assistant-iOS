@@ -7,6 +7,7 @@ struct APIKeyInputView: View {
     let onSave: (String) -> Void
 
     @State private var inputText = ""
+    @State private var modelText = ""
 
     var body: some View {
         NavigationStack {
@@ -20,6 +21,16 @@ struct APIKeyInputView: View {
                 } footer: {
                     Text("Your API key is stored securely in the Keychain on this device.")
                 }
+
+                Section {
+                    TextField(provider.defaultModel, text: $modelText)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                } header: {
+                    Text("Model (Optional)")
+                } footer: {
+                    Text("Leave blank to use the default, \(provider.defaultModel). Change this only if the provider retires that model.")
+                }
             }
             .navigationTitle("API Key")
             .navigationBarTitleDisplayMode(.inline)
@@ -29,12 +40,16 @@ struct APIKeyInputView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
+                        provider.modelOverride = modelText
                         onSave(inputText)
                         dismiss()
                     }
                 }
             }
-            .onAppear { inputText = currentKey }
+            .onAppear {
+                inputText = currentKey
+                modelText = provider.modelOverride
+            }
         }
     }
 }

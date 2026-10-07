@@ -2,9 +2,8 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 
-/// Non-Basketball equivalent of `RosterView`, scoped to one sport. Reuses
-/// `RosterCSV` (defined alongside Basketball's `RosterView`) unchanged — the
-/// position column is additive and Basketball's CSVs never carry it.
+/// Roster for one sport, with search and CSV import/export. The Position column
+/// is optional, so position-less (e.g. Basketball) CSVs import unchanged.
 struct SquadRosterView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var players: [SquadPlayer]
@@ -17,6 +16,7 @@ struct SquadRosterView: View {
     @State private var searchText = ""
     @State private var importError: String?
     @State private var showImportError = false
+    @State private var importSummary: String?
 
     init(sport: Sport) {
         self.sport = sport
@@ -62,6 +62,7 @@ struct SquadRosterView: View {
                                     .font(.caption)
                             }
                         }
+                        .buttonStyle(.listRow)
                     }
                     .onDelete(perform: deletePlayers)
                 }
@@ -75,17 +76,17 @@ struct SquadRosterView: View {
                     Button { showImportPicker = true } label: {
                         Label("Import CSV", systemImage: "square.and.arrow.down")
                     }
-                    if let exportURL = generateExportURL() {
-                        ShareLink(item: exportURL, preview: SharePreview(exportURL.lastPathComponent, image: Image(systemName: "tablecells"))) {
-                            Label("Export CSV", systemImage: "square.and.arrow.up")
-                        }
+                    ShareLink(item: rosterExport, preview: SharePreview(rosterExport.filename, image: Image(systemName: "tablecells"))) {
+                        Label("Export CSV", systemImage: "square.and.arrow.up")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
+                .accessibilityLabel("Import or export")
                 Button { showAddPlayer = true } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("Add player")
             }
         }
         .sheet(isPresented: $showAddPlayer) {
@@ -102,6 +103,11 @@ struct SquadRosterView: View {
         } message: {
             Text(importError ?? "Unknown error")
         }
+        .alert("Import Complete", isPresented: Binding(get: { importSummary != nil }, set: { if !$0 { importSummary = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(importSummary ?? "")
+        }
     }
 
     private func deletePlayers(offsets: IndexSet) {
@@ -110,27 +116,35 @@ struct SquadRosterView: View {
         }
     }
 
-    private func generateExportURL() -> URL? {
+    private var rosterExport: CSVExportFile {
         var lines = ["Name,Jersey Number,Position"]
         for player in players {
             let jersey = player.jerseyNumber.map { String($0) } ?? ""
-            lines.append("\(RosterCSV.escape(player.name)),\(jersey),\(player.preferredPositionCode)")
+            lines.append("\(RosterCSV.escape(player.name)),\(jersey),\(RosterCSV.escape(player.preferredPositionCode))")
         }
-        let content = lines.joined(separator: "\n")
-        let safeSport = sport.rules.displayName.replacingOccurrences(of: " ", with: "_")
-        return RosterCSV.createTemporaryFile(filename: "\(safeSport)_Roster.csv", content: content)
+        let safeSport = MatchExport.safeFilenameComponent(sport.rules.displayName)
+        return CSVExportFile(filename: "\(safeSport)_Roster.csv", content: lines.joined(separator: "\n"))
     }
 
     private func handleImport(result: Result<URL, Error>) {
         switch result {
         case .success(let url):
-            guard url.startAccessingSecurityScopedResource() else { return }
-            defer { url.stopAccessingSecurityScopedResource() }
             do {
-                let content = try String(contentsOf: url, encoding: .utf8)
-                for parsed in RosterCSV.parse(content) {
-                    modelContext.insert(SquadPlayer(sport: sport, name: parsed.name, jerseyNumber: parsed.jerseyNumber, preferredPositionCode: parsed.positionCode ?? ""))
+                let content = try RosterCSV.readImportedFile(at: url)
+                let parsed = RosterCSV.parse(content)
+                guard !parsed.isEmpty else {
+                    importError = "No players were found in that file. Make sure it has a Name column."
+                    showImportError = true
+                    return
                 }
+                let existing = players.map { RosterCSV.PlayerKey(name: $0.name, jerseyNumber: $0.jerseyNumber) }
+                let plan = RosterCSV.importPlan(for: parsed, existing: existing)
+                for player in plan.toAdd {
+                    // Only keep position codes this sport actually defines.
+                    let code = player.positionCode.flatMap { sport.rules.position(forCode: $0.uppercased())?.code } ?? ""
+                    modelContext.insert(SquadPlayer(sport: sport, name: player.name, jerseyNumber: player.jerseyNumber, preferredPositionCode: code))
+                }
+                importSummary = RosterCSV.importSummary(plan)
             } catch {
                 importError = error.localizedDescription
                 showImportError = true

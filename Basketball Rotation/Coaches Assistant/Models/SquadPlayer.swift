@@ -1,9 +1,8 @@
 import Foundation
 import SwiftData
 
-/// A roster player for one of the non-Basketball sports. Kept as a separate model
-/// (rather than adding a `sport` field to `Player`) so Basketball's roster and its
-/// screens are never touched by this change.
+/// A roster player for any sport. Basketball's original `Player` records are
+/// copied into this model by `LegacyBasketballMigration`.
 @Model
 final class SquadPlayer {
     var playerID: UUID

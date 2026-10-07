@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Landing page shown on every launch — no persisted "last sport". Six tiles,
-/// including Basketball, which routes to the untouched `ContentView`.
+/// Landing page shown on every launch — no persisted "last sport". One tile per
+/// sport.
 struct SportSelectionView: View {
     let onSelect: (Sport) -> Void
 
@@ -33,7 +33,9 @@ struct SportTile: View {
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: sport.rules.systemImage)
-                .font(.system(size: 40))
+                .font(.largeTitle)
+                .imageScale(.large)
+                .accessibilityHidden(true)
                 .foregroundStyle(sport.tint)
             Text(sport.rules.displayName)
                 .font(.headline)

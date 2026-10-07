@@ -19,10 +19,9 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var players: [Player]
-    @Query private var games: [Game]
     @Query private var squadPlayers: [SquadPlayer]
     @Query private var fixtures: [Fixture]
+    @Query private var cricketMatches: [CricketMatch]
     @AppStorage("appearanceMode") private var appearanceMode = AppearanceMode.system.rawValue
     @AppStorage("selectedAIProvider") private var selectedProviderRaw = AIProvider.gemini.rawValue
     @State private var keyStore = AIAPIKeyStore.shared
@@ -30,6 +29,7 @@ struct SettingsView: View {
     @State private var showDeleteSheet = false
     @State private var showDeleteSuccess = false
     @State private var editingProvider: AIProvider?
+    @State private var showKeySaveError = false
 
     var body: some View {
         Form {
@@ -79,25 +79,19 @@ struct SettingsView: View {
                 HStack {
                     Text("Players")
                     Spacer()
-                    Text("\(players.count)")
-                        .foregroundStyle(.secondary)
-                }
-                HStack {
-                    Text("Games")
-                    Spacer()
-                    Text("\(games.count)")
-                        .foregroundStyle(.secondary)
-                }
-                HStack {
-                    Text("Other Sports — Players")
-                    Spacer()
                     Text("\(squadPlayers.count)")
                         .foregroundStyle(.secondary)
                 }
                 HStack {
-                    Text("Other Sports — Fixtures")
+                    Text("Games & Fixtures")
                     Spacer()
                     Text("\(fixtures.count)")
+                        .foregroundStyle(.secondary)
+                }
+                HStack {
+                    Text("Cricket Matches")
+                    Spacer()
+                    Text("\(cricketMatches.count)")
                         .foregroundStyle(.secondary)
                 }
             }
@@ -135,11 +129,11 @@ struct SettingsView: View {
         .sheet(item: $editingProvider) { provider in
             if provider == .custom {
                 CustomProviderConfigView(currentKey: keyStore.apiKey(for: provider)) { newValue in
-                    keyStore.setAPIKey(newValue, for: provider)
+                    if !keyStore.setAPIKey(newValue, for: provider) { showKeySaveError = true }
                 }
             } else {
                 APIKeyInputView(provider: provider, currentKey: keyStore.apiKey(for: provider)) { newValue in
-                    keyStore.setAPIKey(newValue, for: provider)
+                    if !keyStore.setAPIKey(newValue, for: provider) { showKeySaveError = true }
                 }
             }
         }
@@ -147,6 +141,11 @@ struct SettingsView: View {
             DataDeletionSheet {
                 showDeleteSuccess = true
             }
+        }
+        .alert("Couldn't Save API Key", isPresented: $showKeySaveError) {
+            Button("OK") {}
+        } message: {
+            Text("The key couldn't be stored in the Keychain. Please try again.")
         }
         .alert("Data Deleted", isPresented: $showDeleteSuccess) {
             Button("OK") {}

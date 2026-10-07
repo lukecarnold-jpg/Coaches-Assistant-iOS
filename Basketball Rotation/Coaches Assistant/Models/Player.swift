@@ -1,6 +1,9 @@
 import Foundation
 import SwiftData
 
+/// **Legacy, read-only.** Basketball players from before Basketball moved onto
+/// `SquadPlayer`. Kept only so `LegacyBasketballMigration` can read existing
+/// stores. Do not change stored properties.
 @Model
 final class Player {
     var playerID: UUID
@@ -13,12 +16,5 @@ final class Player {
         self.name = name
         self.jerseyNumber = jerseyNumber
         self.createdAt = Date()
-    }
-
-    var displayName: String {
-        if let num = jerseyNumber {
-            return "#\(num) \(name)"
-        }
-        return name
     }
 }

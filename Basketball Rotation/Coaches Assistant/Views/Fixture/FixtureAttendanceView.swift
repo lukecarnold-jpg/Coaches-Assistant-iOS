@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// Non-Basketball equivalent of `AttendanceView`.
+/// Mark players absent for a match; absent on-field players are benched.
 struct FixtureAttendanceView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext

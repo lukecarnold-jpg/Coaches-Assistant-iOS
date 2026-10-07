@@ -1,9 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// Non-Basketball equivalent of `SubstitutionView`. Reuses `PairBadge` (defined
-/// alongside Basketball's `SubstitutionView`) unchanged. Excludes sent-off
-/// players from the bench, and carries the outgoing player's position to
+/// Paired substitutions (numbered `PairBadge`s match each outgoing player to their
+/// replacement). Excludes sent-off players from the bench, and carries the outgoing player's position to
 /// whoever replaces them.
 struct FixtureSubstitutionView: View {
     @Environment(\.modelContext) private var modelContext
@@ -186,5 +185,21 @@ struct FixtureSubstitutionView: View {
             fixture.events.append(inEvent)
         }
         dismiss()
+    }
+}
+
+/// Numbered, colour-coded badge pairing an outgoing player with their replacement.
+struct PairBadge: View {
+    let number: Int
+
+    private static let colors: [Color] = [.blue, .green, .orange, .purple, .red]
+    private var color: Color { Self.colors[(number - 1) % Self.colors.count] }
+
+    var body: some View {
+        Text("\(number)")
+            .font(.caption.bold())
+            .foregroundStyle(.white)
+            .frame(width: 26, height: 26)
+            .background(color, in: Circle())
     }
 }
