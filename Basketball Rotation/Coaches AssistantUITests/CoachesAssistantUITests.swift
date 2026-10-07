@@ -26,6 +26,23 @@ final class CoachesAssistantUITests: XCTestCase {
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", prefix)).firstMatch
     }
 
+    /// Waits for a tappable button with `label` other than the one at `excludedFrame`.
+    @MainActor
+    private func hittableButton(labelled label: String, excludingFrame excludedFrame: CGRect, in app: XCUIApplication, timeout: TimeInterval = 5) -> XCUIElement? {
+        let candidates = app.buttons.matching(NSPredicate(format: "label == %@", label))
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            for index in 0..<candidates.count {
+                let element = candidates.element(boundBy: index)
+                if element.isHittable && element.frame != excludedFrame {
+                    return element
+                }
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        } while Date() < deadline
+        return nil
+    }
+
     @MainActor
     private func addPlayer(_ name: String, jersey: Int, in app: XCUIApplication) {
         app.buttons["Add player"].tap()
@@ -89,12 +106,14 @@ final class CoachesAssistantUITests: XCTestCase {
 
         // End the game.
         app.swipeUp()
-        app.buttons["End Game"].firstMatch.tap()
-        // The confirmation is a popover anchored to the button; its own
-        // "End Game" action is the second match once it appears.
-        let endButtons = app.buttons.matching(NSPredicate(format: "label == %@", "End Game"))
-        XCTAssertTrue(endButtons.element(boundBy: 1).waitForExistence(timeout: 5))
-        endButtons.element(boundBy: 1).tap()
+        let endGame = app.buttons["End Game"].firstMatch
+        let endGameFrame = endGame.frame
+        endGame.tap()
+        // The confirmation's own "End Game" action is presented as a popover on
+        // iOS 27 and an action sheet on iOS 26, so find it by being a different,
+        // tappable button rather than by its index.
+        let confirm = try XCTUnwrap(hittableButton(labelled: "End Game", excludingFrame: endGameFrame, in: app))
+        confirm.tap()
         XCTAssertTrue(app.staticTexts["Final"].waitForExistence(timeout: 5))
     }
 
