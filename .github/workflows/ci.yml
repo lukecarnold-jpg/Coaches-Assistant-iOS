@@ -24,8 +24,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show Xcode version
-        run: xcodebuild -version
+      # The app targets iOS 26.5, so use the newest Xcode installed on the runner
+      # rather than whatever the image happens to default to.
+      - name: Select latest Xcode
+        run: |
+          LATEST_XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)
+          sudo xcode-select -s "$LATEST_XCODE"
+          xcodebuild -version
+
+      # Pick an available iPhone simulator at run time instead of hard-coding a
+      # model name that disappears when the runner image updates.
+      - name: Pick simulator
+        id: simulator
+        run: |
+          UDID=$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)["devices"]
+          runtimes = sorted((r for r in data if "iOS" in r), reverse=True)
+          for runtime in runtimes:
+              for device in data[runtime]:
+                  if device["name"].startswith("iPhone"):
+                      print(device["udid"]); sys.exit(0)
+          sys.exit("No available iPhone simulator")
+          ')
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
 
       - name: Build and test
         run: |
@@ -33,7 +55,7 @@ jobs:
           xcodebuild test \
             -project "Coaches Assistant.xcodeproj" \
             -scheme "Coaches Assistant" \
-            -destination "platform=iOS Simulator,name=iPhone 16 Pro" \
+            -destination "id=${{ steps.simulator.outputs.udid }}" \
             -resultBundlePath "$PWD/TestResults.xcresult" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO

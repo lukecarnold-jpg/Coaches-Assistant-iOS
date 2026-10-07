@@ -53,7 +53,10 @@ struct CoachesAssistantApp: App {
             CricketMatch.self,
             CricketPlayerStats.self,
         ])
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        // UI tests launch with `-uiTesting` so each run starts empty and never
+        // touches a real on-disk store.
+        let isUITesting = ProcessInfo.processInfo.arguments.contains("-uiTesting")
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: isUITesting)
 
         do {
             return try ModelContainer(for: schema, configurations: [config])
