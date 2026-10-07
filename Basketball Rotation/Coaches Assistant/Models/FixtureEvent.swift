@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-enum FixtureEventType: String, CaseIterable {
+nonisolated enum FixtureEventType: String, CaseIterable {
     case substitutionIn  = "Sub In"
     case substitutionOut = "Sub Out"
     case discipline       = "Discipline"

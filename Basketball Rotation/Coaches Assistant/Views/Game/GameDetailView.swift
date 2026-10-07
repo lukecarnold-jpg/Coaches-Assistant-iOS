@@ -3,7 +3,6 @@ import SwiftData
 
 struct GameDetailView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Query(sort: \Player.name) private var allPlayers: [Player]
 
     @Bindable var game: Game
@@ -15,12 +14,12 @@ struct GameDetailView: View {
     @State private var showPlayingTime = false
     @State private var showFoulPicker = false
     @State private var showMVPPicker = false
-    @State private var showManualClock = false
     @State private var showAdvancePeriodConfirm = false
     @State private var showEndGameConfirm = false
-    @State private var manualMinutes = ""
-    @State private var manualSeconds = ""
     @State private var showTeamScoreSheet = false
+    @State private var showOpponentScoreSheet = false
+
+    private let requiredOnCourtCount = Game.requiredOnCourtCount
 
     var presentPlayers: [Player] {
         let absentIDs = Set(game.attendances.filter { $0.isAbsent }.map { $0.playerID })
@@ -28,10 +27,9 @@ struct GameDetailView: View {
     }
 
     var onCourtPlayers: [Player] {
-        allPlayers.filter { game.onCourtPlayerIDs.contains($0.playerID.uuidString) }
+        let onCourt = Set(game.onCourtPlayerIDs)
+        return allPlayers.filter { onCourt.contains($0.playerID.uuidString) }
     }
-
-    private let requiredOnCourtCount = 5
 
     /// True once the present roster is too small to leave anyone on the bench —
     /// covers both "exactly enough" and "short-handed" squads.
@@ -39,32 +37,32 @@ struct GameDetailView: View {
         !game.isEnded && presentPlayers.count <= requiredOnCourtCount
     }
 
-    var noSubstitutesMessage: String {
-        if presentPlayers.count < requiredOnCourtCount {
-            return "Only \(presentPlayers.count) of \(requiredOnCourtCount) players present — no bench to substitute from."
-        }
-        return "Exactly \(requiredOnCourtCount) players present — no bench to substitute from."
-    }
-
-    var sortedEvents: [GameEvent] {
-        game.events.sorted { $0.timestamp > $1.timestamp }
-    }
-
     var body: some View {
+        let recentEvents = Array(game.events.sorted { $0.timestamp > $1.timestamp }.prefix(5))
+
         ScrollView {
             VStack(spacing: 16) {
-                scoreBoard
-                clockSection
+                MatchScoreboard(
+                    match: game,
+                    tint: .blue,
+                    onTeamMinus: { game.adjustScore(team: true, delta: -1, in: modelContext) },
+                    onTeamPlus: { showTeamScoreSheet = true },
+                    onOpponentMinus: { game.adjustScore(team: false, delta: -1, in: modelContext) },
+                    onOpponentPlus: { showOpponentScoreSheet = true }
+                )
+                MatchClockSection(match: game) {
+                    game.resetClock(in: modelContext)
+                }
                 if game.onCourtPlayerIDs.isEmpty && !game.isEnded {
-                    lineupBanner
+                    LineupBanner(starterCount: requiredOnCourtCount) { showLineupSetup = true }
                 }
                 if hasNoSubstitutesAvailable {
-                    noSubstitutesBanner
+                    NoSubstitutesBanner(availableCount: presentPlayers.count, requiredCount: requiredOnCourtCount)
                 }
                 actionsSection
                 onCourtSection
-                notesSection
-                recentEventsSection
+                CoachingNotesSection(text: $game.notes)
+                recentEventsSection(recentEvents)
             }
             .padding()
             .frame(maxWidth: 760)
@@ -72,6 +70,7 @@ struct GameDetailView: View {
         }
         .navigationTitle("vs \(game.opponentName)")
         .navigationBarTitleDisplayMode(.inline)
+        .keepsScreenAwake(game.isGameDayModeActive && !game.isEnded)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -84,20 +83,22 @@ struct GameDetailView: View {
                     Button { showPlayingTime = true } label: {
                         Label("Playing Time", systemImage: "stopwatch")
                     }
-                    Divider()
-                    if let csvURL = generateGameCSVURL() {
-                        ShareLink(item: csvURL, preview: SharePreview(csvURL.lastPathComponent, image: Image(systemName: "tablecells"))) {
-                            Label("Export Events CSV", systemImage: "tablecells")
+                    if !game.isEnded {
+                        Toggle(isOn: $game.isGameDayModeActive) {
+                            Label("Game Day Mode", systemImage: "sun.max")
                         }
                     }
-                    if let txtURL = generateNotesTXTURL() {
-                        ShareLink(item: txtURL, preview: SharePreview(txtURL.lastPathComponent, image: Image(systemName: "doc.text"))) {
-                            Label("Export Notes TXT", systemImage: "doc.text")
-                        }
+                    Divider()
+                    ShareLink(item: eventsExport, preview: SharePreview(eventsExport.filename, image: Image(systemName: "tablecells"))) {
+                        Label("Export Events CSV", systemImage: "tablecells")
+                    }
+                    ShareLink(item: notesExport, preview: SharePreview(notesExport.filename, image: Image(systemName: "doc.text"))) {
+                        Label("Export Notes TXT", systemImage: "doc.text")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
+                .accessibilityLabel("More options")
             }
         }
         .sheet(isPresented: $showLineupSetup) {
@@ -117,228 +118,42 @@ struct GameDetailView: View {
         }
         .sheet(isPresented: $showFoulPicker) {
             PlayerPickerSheet(title: "Log Foul", players: presentPlayers) { player in
-                logEvent(type: .foul, player: player, detail: "Foul")
+                game.logEvent(.foul, player: player, detail: "Foul", in: modelContext)
             }
         }
         .sheet(isPresented: $showMVPPicker) {
             PlayerPickerSheet(title: "MVP Vote", players: presentPlayers) { player in
-                logEvent(type: .mvpVote, player: player, detail: "MVP Vote")
-            }
-        }
-        .sheet(isPresented: $showManualClock) {
-            ManualClockView(minutes: $manualMinutes, seconds: $manualSeconds) {
-                applyManualTime()
+                game.logEvent(.mvpVote, player: player, detail: "MVP Vote", in: modelContext)
             }
         }
         .sheet(isPresented: $showTeamScoreSheet) {
-            TeamScoreSheet(players: onCourtPlayers.isEmpty ? presentPlayers : onCourtPlayers) { player, points in
-                logTeamScore(player: player, points: points)
+            TeamScoreSheet(title: "Team Score", players: onCourtPlayers.isEmpty ? presentPlayers : onCourtPlayers) { player, points in
+                game.logTeamScore(points: points, player: player, in: modelContext)
+            }
+        }
+        .sheet(isPresented: $showOpponentScoreSheet) {
+            TeamScoreSheet(title: "\(game.opponentName) Score", players: [], showScorer: false) { _, points in
+                game.adjustScore(team: false, delta: points, in: modelContext)
             }
         }
         .confirmationDialog("Advance Period", isPresented: $showAdvancePeriodConfirm) {
-            Button("Advance to \(nextPeriodLabel())") {
-                advancePeriod()
+            Button("Advance to \(game.periodLabel(forPeriod: game.currentPeriod + 1))") {
+                game.advancePeriod(in: modelContext)
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will end the current period and start the next one.")
+            Text(game.currentPeriod >= game.totalPeriods
+                 ? "Regulation time is over. This starts an overtime period."
+                 : "This will end the current period and start the next one.")
         }
         .confirmationDialog("End Game", isPresented: $showEndGameConfirm) {
             Button("End Game", role: .destructive) {
-                endGame()
+                game.endGame(in: modelContext)
             }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Final score: \(game.teamScore) – \(game.opponentScore)")
         }
-    }
-
-    // MARK: - Score Board
-
-    var scoreBoard: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Text(game.isEnded ? "Final" : game.periodLabel)
-                    .font(.caption.bold())
-                    .foregroundStyle(game.isEnded ? Color.gray : Color.blue)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 3)
-                    .background(game.isEnded ? Color.gray.opacity(0.15) : Color.blue.opacity(0.1), in: Capsule())
-
-                if game.isGameDayModeActive {
-                    Label("Game Day Mode", systemImage: "bell.slash.fill")
-                        .font(.caption2.bold())
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 3)
-                        .background(Color.indigo, in: Capsule())
-                }
-            }
-
-            HStack(spacing: 0) {
-                VStack(spacing: 4) {
-                    Text("US")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("\(game.teamScore)")
-                        .font(.system(size: horizontalSizeClass == .compact ? 46 : 58, weight: .bold, design: .rounded))
-                    if !game.isEnded {
-                        HStack(spacing: 8) {
-                            Button { adjustScore(team: true, delta: -1) } label: {
-                                Image(systemName: "minus.circle.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Button { showTeamScoreSheet = true } label: {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(.blue)
-                            }
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity)
-
-                Text("–")
-                    .font(.title)
-                    .foregroundStyle(.secondary)
-
-                VStack(spacing: 4) {
-                    Text(game.opponentName)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    Text("\(game.opponentScore)")
-                        .font(.system(size: horizontalSizeClass == .compact ? 46 : 58, weight: .bold, design: .rounded))
-                    if !game.isEnded {
-                        HStack(spacing: 8) {
-                            Button { adjustScore(team: false, delta: -1) } label: {
-                                Image(systemName: "minus.circle.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Button { adjustScore(team: false, delta: 1) } label: {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(.orange)
-                            }
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            }
-        }
-        .padding()
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-    }
-
-    // MARK: - Clock Section
-
-    var clockSection: some View {
-        TimelineView(.periodic(from: .now, by: 1.0)) { _ in
-            let elapsed = game.currentElapsedSeconds()
-            let remaining = game.remainingSeconds(at: elapsed)
-            VStack(spacing: 8) {
-                HStack {
-                    VStack {
-                        Text(formatTime(remaining))
-                            .font(.system(size: horizontalSizeClass == .compact ? 30 : 40, weight: .bold, design: .monospaced))
-                        Text("Remaining")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-
-                    Divider().frame(height: horizontalSizeClass == .compact ? 42 : 56)
-
-                    VStack {
-                        Text(formatTime(elapsed))
-                            .font(.system(size: horizontalSizeClass == .compact ? 30 : 40, weight: .bold, design: .monospaced))
-                        Text("Elapsed")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-
-                if !game.isEnded {
-                    HStack(spacing: 16) {
-                        Button {
-                            toggleClock()
-                        } label: {
-                            Label(game.clockIsRunning ? "Stop" : "Start", systemImage: game.clockIsRunning ? "stop.fill" : "play.fill")
-                                .font(.headline)
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(game.clockIsRunning ? .red : .green)
-
-                        Button {
-                            resetClock()
-                        } label: {
-                            Image(systemName: "arrow.counterclockwise")
-                                .font(.title2)
-                        }
-                        .buttonStyle(.bordered)
-
-                        Button {
-                            prepareManualClock(elapsed: elapsed)
-                            showManualClock = true
-                        } label: {
-                            Image(systemName: "pencil")
-                                .font(.title2)
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                }
-            }
-            .padding()
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-        }
-    }
-
-    // MARK: - Lineup Banner
-
-    var lineupBanner: some View {
-        Button { showLineupSetup = true } label: {
-            HStack {
-                Image(systemName: "person.3.fill")
-                    .foregroundStyle(.orange)
-                VStack(alignment: .leading) {
-                    Text("Set Starting Lineup")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                    Text("Tap to select your 5 starters")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .foregroundStyle(.tertiary)
-            }
-            .padding()
-            .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
-        }
-    }
-
-    // MARK: - No Substitutes Banner
-
-    var noSubstitutesBanner: some View {
-        HStack {
-            Image(systemName: "person.2.slash.fill")
-                .foregroundStyle(.orange)
-            VStack(alignment: .leading) {
-                Text(presentPlayers.count < requiredOnCourtCount ? "Playing Short-Handed" : "No Substitutes Available")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                Text(noSubstitutesMessage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-        .padding()
-        .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
     }
 
     // MARK: - Actions Section
@@ -355,10 +170,8 @@ struct GameDetailView: View {
                 ActionButton(title: "Sub", icon: "arrow.left.arrow.right", color: .purple, isDisabled: hasNoSubstitutesAvailable) {
                     showSubstitution = true
                 }
-                if game.currentPeriod < game.totalPeriods {
-                    ActionButton(title: "Next Period", icon: "forward.end.fill", color: .blue) {
-                        showAdvancePeriodConfirm = true
-                    }
+                ActionButton(title: game.currentPeriod >= game.totalPeriods ? "Overtime" : "Next Period", icon: "forward.end.fill", color: .blue) {
+                    showAdvancePeriodConfirm = true
                 }
                 ActionButton(title: "End Game", icon: "flag.checkered", color: .gray) {
                     showEndGameConfirm = true
@@ -369,59 +182,44 @@ struct GameDetailView: View {
 
     // MARK: - On Court Section
 
+    @ViewBuilder
     var onCourtSection: some View {
-        Group {
-            if !onCourtPlayers.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("On Court")
-                            .font(.headline)
-                        Spacer()
-                        if !game.isEnded {
-                            Button("Lineup") { showLineupSetup = true }
-                                .font(.caption)
-                        }
-                    }
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 8)], spacing: 8) {
-                        ForEach(onCourtPlayers) { player in
-                            HStack {
-                                Image(systemName: "figure.basketball")
-                                    .foregroundStyle(.blue)
-                                Text(player.displayName)
-                                    .font(.subheadline)
-                                    .lineLimit(1)
-                                Spacer()
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-                        }
+        if !onCourtPlayers.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("On Court")
+                        .font(.headline)
+                    Spacer()
+                    if !game.isEnded {
+                        Button("Lineup") { showLineupSetup = true }
+                            .font(.caption)
                     }
                 }
-                .padding()
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 8)], spacing: 8) {
+                    ForEach(onCourtPlayers) { player in
+                        HStack {
+                            Image(systemName: "figure.basketball")
+                                .foregroundStyle(.blue)
+                                .accessibilityHidden(true)
+                            Text(player.displayName)
+                                .font(.subheadline)
+                                .lineLimit(1)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
             }
+            .padding()
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
         }
-    }
-
-    // MARK: - Notes Section
-
-    var notesSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Coaching Notes")
-                .font(.headline)
-            TextEditor(text: $game.notes)
-                .frame(minHeight: horizontalSizeClass == .compact ? 80 : 120)
-                .padding(4)
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 8))
-        }
-        .padding()
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
     }
 
     // MARK: - Recent Events Section
 
-    var recentEventsSection: some View {
+    func recentEventsSection(_ events: [GameEvent]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Recent Events")
@@ -430,14 +228,14 @@ struct GameDetailView: View {
                 Button("See All") { showEventHistory = true }
                     .font(.caption)
             }
-            if sortedEvents.isEmpty {
+            if events.isEmpty {
                 Text("No events yet")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 8)
             } else {
-                ForEach(sortedEvents.prefix(5)) { event in
+                ForEach(events) { event in
                     EventRowView(event: event)
                 }
             }
@@ -446,174 +244,33 @@ struct GameDetailView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
     }
 
-    // MARK: - Actions
+    // MARK: - Exports
 
-    private func logTeamScore(player: Player?, points: Int) {
-        game.teamScore += points
-        logEvent(type: .teamScore, player: player, detail: "+\(points)", scoreDelta: points)
-    }
-
-    private func adjustScore(team: Bool, delta: Int) {
-        let previous = team ? game.teamScore : game.opponentScore
-        let clamped = max(0, previous + delta)
-        let appliedDelta = clamped - previous
-        if team {
-            game.teamScore = clamped
-            logEvent(type: .teamScore, player: nil, detail: appliedDelta > 0 ? "+\(appliedDelta)" : "\(appliedDelta)", scoreDelta: appliedDelta)
-        } else {
-            game.opponentScore = clamped
-            logEvent(type: .opponentScore, player: nil, detail: appliedDelta > 0 ? "+\(appliedDelta)" : "\(appliedDelta)", scoreDelta: appliedDelta)
+    private var eventsExport: CSVExportFile {
+        let rows = game.events.sorted { $0.timestamp < $1.timestamp }.map { event in
+            MatchExport.EventRow(
+                period: game.shortPeriodLabel(forPeriod: event.periodNumber),
+                time: formatClock(event.elapsedSeconds),
+                event: event.displayName(opponentName: game.opponentName),
+                player: event.playerName,
+                detail: event.detail
+            )
         }
-    }
-
-    private func toggleClock() {
-        if game.clockIsRunning {
-            game.elapsedSeconds = game.currentElapsedSeconds()
-            game.clockIsRunning = false
-            game.clockStartedAt = nil
-        } else {
-            game.clockIsRunning = true
-            game.clockStartedAt = Date()
-        }
-    }
-
-    private func resetClock() {
-        game.elapsedSeconds = 0
-        game.clockIsRunning = false
-        game.clockStartedAt = nil
-    }
-
-    private func prepareManualClock(elapsed: Int) {
-        let remaining = game.remainingSeconds(at: elapsed)
-        manualMinutes = String(remaining / 60)
-        manualSeconds = String(remaining % 60)
-    }
-
-    private func applyManualTime() {
-        let mins = Int(manualMinutes) ?? 0
-        let secs = Int(manualSeconds) ?? 0
-        let remainingTarget = mins * 60 + secs
-        let newElapsed = max(0, game.periodLengthSeconds - remainingTarget)
-        game.elapsedSeconds = newElapsed
-        game.clockIsRunning = false
-        game.clockStartedAt = nil
-    }
-
-    private func advancePeriod() {
-        stopClock()
-        let event = GameEvent(game: game, eventType: .periodAdvance, detail: "End of \(game.periodLabel)", periodNumber: game.currentPeriod, elapsedSeconds: game.elapsedSeconds)
-        modelContext.insert(event)
-        game.events.append(event)
-        game.currentPeriod += 1
-        game.elapsedSeconds = 0
-    }
-
-    private func endGame() {
-        stopClock()
-        game.isEnded = true
-        game.isGameDayModeActive = false
-        let event = GameEvent(game: game, eventType: .gameEnd, detail: "Final: \(game.teamScore) – \(game.opponentScore)", periodNumber: game.currentPeriod, elapsedSeconds: game.elapsedSeconds)
-        modelContext.insert(event)
-        game.events.append(event)
-    }
-
-    private func stopClock() {
-        if game.clockIsRunning {
-            game.elapsedSeconds = game.currentElapsedSeconds()
-            game.clockIsRunning = false
-            game.clockStartedAt = nil
-        }
-    }
-
-    private func logEvent(type: GameEventType, player: Player?, detail: String, scoreDelta: Int = 0) {
-        let event = GameEvent(
-            game: game,
-            eventType: type,
-            playerID: player?.playerID,
-            playerName: player?.name ?? "",
-            detail: detail,
-            periodNumber: game.currentPeriod,
-            elapsedSeconds: game.currentElapsedSeconds(),
-            scoreDelta: scoreDelta
+        return CSVExportFile(
+            filename: MatchExport.filename(prefix: "Game_Events", opponentName: game.opponentName, ext: "csv"),
+            content: MatchExport.eventsCSV(rows: rows, notes: game.notes)
         )
-        modelContext.insert(event)
-        game.events.append(event)
     }
 
-    private func nextPeriodLabel() -> String {
-        let next = game.currentPeriod + 1
-        if game.periodFormat == "quarters" {
-            switch next {
-            case 2: return "2nd Quarter"
-            case 3: return "3rd Quarter"
-            case 4: return "4th Quarter"
-            default: return "Period \(next)"
-            }
-        } else {
-            return next == 2 ? "2nd Half" : "OT"
-        }
-    }
-
-    private func generateGameCSVURL() -> URL? {
-        var lines = ["Period,Time,Event,Player,Detail"]
-        for event in game.events.sorted(by: { $0.timestamp < $1.timestamp }) {
-            let time = formatTime(event.elapsedSeconds)
-            let player = event.playerName.isEmpty ? "" : event.playerName
-            let detail = event.detail.replacingOccurrences(of: ",", with: " ")
-            let eventName = event.displayName(opponentName: game.opponentName)
-            lines.append("\(event.periodNumber),\(time),\(eventName),\(player),\(detail)")
-        }
-        if !game.notes.isEmpty {
-            lines.append("")
-            lines.append("Coaching Notes")
-            lines.append(game.notes.replacingOccurrences(of: "\n", with: " "))
-        }
-        let content = lines.joined(separator: "\n")
-        let safeOpponent = game.opponentName.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "[^a-zA-Z0-9_\\-]", with: "_", options: .regularExpression)
-        let filename = safeOpponent.isEmpty ? "Game_Events.csv" : "Game_Events_vs_\(safeOpponent).csv"
-        return RosterCSV.createTemporaryFile(filename: filename, content: content)
-    }
-
-    private func generateNotesTXTURL() -> URL? {
-        let header = "Game Notes – vs \(game.opponentName) – \(game.date.formatted(date: .long, time: .omitted))\n\n"
-        let content = header + (game.notes.isEmpty ? "No notes." : game.notes)
-        let safeOpponent = game.opponentName.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "[^a-zA-Z0-9_\\-]", with: "_", options: .regularExpression)
-        let filename = safeOpponent.isEmpty ? "Game_Notes.txt" : "Game_Notes_vs_\(safeOpponent).txt"
-        return RosterCSV.createTemporaryFile(filename: filename, content: content)
-    }
-
-    func formatTime(_ seconds: Int) -> String {
-        let m = seconds / 60
-        let s = seconds % 60
-        return String(format: "%02d:%02d", m, s)
+    private var notesExport: TextExportFile {
+        TextExportFile(
+            filename: MatchExport.filename(prefix: "Game_Notes", opponentName: game.opponentName, ext: "txt"),
+            content: MatchExport.notesText(title: "Game Notes", opponentName: game.opponentName, date: game.date, notes: game.notes)
+        )
     }
 }
 
 // MARK: - Supporting Views
-
-struct ActionButton: View {
-    let title: String
-    let icon: String
-    let color: Color
-    var isDisabled: Bool = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.title2)
-                Text(title)
-                    .font(.caption.bold())
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(color.opacity(isDisabled ? 0.05 : 0.1), in: RoundedRectangle(cornerRadius: 12))
-            .foregroundStyle(isDisabled ? color.opacity(0.4) : color)
-        }
-        .disabled(isDisabled)
-    }
-}
 
 struct EventRowView: View {
     let event: GameEvent
@@ -624,6 +281,7 @@ struct EventRowView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(width: 20)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text(event.displayName(opponentName: event.game?.opponentName ?? ""))
@@ -641,11 +299,12 @@ struct EventRowView: View {
                 }
             }
             Spacer()
-            Text("Q\(event.periodNumber)")
+            Text(event.game?.shortPeriodLabel(forPeriod: event.periodNumber) ?? "\(event.periodNumber)")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -677,9 +336,13 @@ struct PlayerPickerSheet: View {
     }
 }
 
+/// Basketball points picker (1/2/3), used for both teams. The scorer list is
+/// hidden for the opponent, whose roster we don't track.
 struct TeamScoreSheet: View {
     @Environment(\.dismiss) private var dismiss
+    let title: String
     let players: [Player]
+    var showScorer: Bool = true
     let onConfirm: (Player?, Int) -> Void
 
     @State private var selectedPlayer: Player?
@@ -698,33 +361,36 @@ struct TeamScoreSheet: View {
                     .labelsHidden()
                 }
 
-                Section {
-                    if players.isEmpty {
-                        Text("No players available — set lineup first.")
-                            .foregroundStyle(.secondary)
-                            .font(.subheadline)
-                    } else {
-                        ForEach(players) { player in
-                            Button {
-                                selectedPlayer = selectedPlayer?.playerID == player.playerID ? nil : player
-                            } label: {
-                                HStack {
-                                    Text(player.displayName)
-                                        .foregroundStyle(.primary)
-                                    Spacer()
-                                    if selectedPlayer?.playerID == player.playerID {
-                                        Image(systemName: "checkmark")
-                                            .foregroundStyle(.blue)
+                if showScorer {
+                    Section {
+                        if players.isEmpty {
+                            Text("No players available — set lineup first.")
+                                .foregroundStyle(.secondary)
+                                .font(.subheadline)
+                        } else {
+                            ForEach(players) { player in
+                                Button {
+                                    selectedPlayer = selectedPlayer?.playerID == player.playerID ? nil : player
+                                } label: {
+                                    HStack {
+                                        Text(player.displayName)
+                                            .foregroundStyle(.primary)
+                                        Spacer()
+                                        if selectedPlayer?.playerID == player.playerID {
+                                            Image(systemName: "checkmark")
+                                                .foregroundStyle(.blue)
+                                        }
                                     }
                                 }
+                                .accessibilityAddTraits(selectedPlayer?.playerID == player.playerID ? .isSelected : [])
                             }
                         }
+                    } header: {
+                        Text("Scorer (Optional)")
                     }
-                } header: {
-                    Text("Scorer (Optional)")
                 }
             }
-            .navigationTitle("Team Score")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -733,44 +399,6 @@ struct TeamScoreSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Log +\(points)") {
                         onConfirm(selectedPlayer, points)
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
-}
-
-struct ManualClockView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Binding var minutes: String
-    @Binding var seconds: String
-    let onApply: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Set Remaining Time") {
-                    HStack {
-                        TextField("MM", text: $minutes)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                        Text(":")
-                        TextField("SS", text: $seconds)
-                            .keyboardType(.numberPad)
-                    }
-                    .font(.system(size: 32, weight: .bold, design: .monospaced))
-                }
-            }
-            .navigationTitle("Set Clock")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Apply") {
-                        onApply()
                         dismiss()
                     }
                 }

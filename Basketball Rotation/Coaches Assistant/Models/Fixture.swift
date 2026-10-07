@@ -3,15 +3,15 @@ import SwiftData
 
 /// The non-Basketball equivalent of `Game`. Kept as a separate model so Basketball's
 /// `Game`/`GameEvent`/`GameAttendance` and every view built on them are untouched by
-/// this change; the port duplicates `Game`'s clock/lineup/playing-time logic exactly,
-/// with `sport`-driven rules layered on top.
+/// this change. Clock, period, scoring and playing-time logic is shared with `Game`
+/// via `TimedMatch`, with `sport`-driven rules layered on top.
 @Model
 final class Fixture {
     var fixtureID: UUID
     var sport: String
     var date: Date
     var opponentName: String
-    var periodFormat: String  // "quarters" or "halves"
+    var periodFormat: String  // PeriodFormat raw value
     var periodLengthMinutes: Int
     var currentPeriod: Int
     var teamScore: Int
@@ -59,49 +59,14 @@ final class Fixture {
         self.clockStartedAt = nil
     }
 
-    var sportValue: Sport { Sport(rawValue: sport) ?? .basketball }
+    /// Falls back to soccer (never Basketball, which doesn't use `Fixture`) if the
+    /// stored value is unrecognised — and flags it loudly in debug builds.
+    var sportValue: Sport {
+        if let value = Sport(rawValue: sport) { return value }
+        assertionFailure("Fixture has unknown sport '\(sport)'")
+        return .soccer
+    }
     var rules: SportRules { sportValue.rules }
-
-    var totalPeriods: Int {
-        periodFormat == "quarters" ? 4 : 2
-    }
-
-    var periodLengthSeconds: Int {
-        periodLengthMinutes * 60
-    }
-
-    var periodLabel: String { periodLabel(forPeriod: currentPeriod) }
-
-    /// Generalized so callers needing the *next* period's label (e.g. an "Advance
-    /// to 2nd Half" confirmation) don't need their own copy of this switch.
-    func periodLabel(forPeriod period: Int) -> String {
-        if periodFormat == "quarters" {
-            switch period {
-            case 1: return "1st Quarter"
-            case 2: return "2nd Quarter"
-            case 3: return "3rd Quarter"
-            case 4: return "4th Quarter"
-            default: return "OT \(period - 4)"
-            }
-        } else {
-            switch period {
-            case 1: return "1st Half"
-            case 2: return "2nd Half"
-            default: return "OT \(period - 2)"
-            }
-        }
-    }
-
-    func currentElapsedSeconds() -> Int {
-        if clockIsRunning, let startedAt = clockStartedAt {
-            return elapsedSeconds + Int(Date().timeIntervalSince(startedAt))
-        }
-        return elapsedSeconds
-    }
-
-    func remainingSeconds(at elapsed: Int) -> Int {
-        max(0, periodLengthSeconds - elapsed)
-    }
 
     // MARK: - Lineup helpers
 
@@ -134,56 +99,90 @@ final class Fixture {
     // MARK: - Discipline
 
     /// Send-offs are derived from the event log rather than stored on the player,
-    /// so deleting the event in history restores eligibility for free.
+    /// so deleting the event in history restores eligibility for free. Covers every
+    /// permanent removal in the sport's rules (send-off, red card, misconduct, …).
     var sentOffPlayerIDs: Set<UUID> {
-        Set(events.filter { $0.actionCode == "sendOff" }.compactMap(\.playerID))
+        let rules = rules
+        return Set(events.filter { event in
+            event.eventKind == .discipline && rules.disciplineAction(forCode: event.actionCode)?.removal == .permanent
+        }.compactMap(\.playerID))
     }
 
-    // MARK: - Playing time
+    // MARK: - Event logging
 
-    /// Ported line-for-line from `Game.minutesPlayedSeconds()`. Sin-bin/send-off
-    /// removals need no special cases here because they're logged as an ordinary
-    /// paired `.substitutionOut` alongside the discipline event.
-    func minutesPlayedSeconds() -> [UUID: Int] {
-        var totals: [UUID: Int] = [:]
-        var intervalStart: [UUID: Int] = [:]
+    /// Creates, inserts and attaches an event stamped with the current period/clock.
+    @discardableResult
+    func logEvent(_ type: FixtureEventType, player: SquadPlayer? = nil, detail: String = "", actionCode: String = "", scoreDelta: Int = 0, in context: ModelContext) -> FixtureEvent {
+        let event = FixtureEvent(
+            fixture: self,
+            eventType: type,
+            actionCode: actionCode,
+            playerID: player?.playerID,
+            playerName: player?.name ?? "",
+            detail: detail,
+            periodNumber: currentPeriod,
+            elapsedSeconds: currentElapsedSeconds(),
+            scoreDelta: scoreDelta
+        )
+        context.insert(event)
+        events.append(event)
+        return event
+    }
 
-        func gameSeconds(period: Int, elapsed: Int) -> Int {
-            max(0, period - 1) * periodLengthSeconds + elapsed
-        }
+    func logScore(team: Bool, action: ScoringAction, player: SquadPlayer?, in context: ModelContext) {
+        let applied = applyScore(team: team, delta: action.points)
+        guard applied != 0 else { return }
+        logEvent(team ? .teamScore : .opponentScore, player: team ? player : nil, detail: action.label, actionCode: action.code, scoreDelta: applied, in: context)
+    }
 
-        for idString in startingLineupIDs {
-            if let id = UUID(uuidString: idString) {
-                intervalStart[id] = 0
-            }
-        }
+    /// Manual score correction. Logs nothing if the score was already 0.
+    func adjustScore(team: Bool, delta: Int, in context: ModelContext) {
+        let applied = applyScore(team: team, delta: delta)
+        guard applied != 0 else { return }
+        let detail = applied > 0 ? "+\(applied)" : "\(applied)"
+        logEvent(team ? .teamScore : .opponentScore, detail: detail, scoreDelta: applied, in: context)
+    }
 
-        for event in events.sorted(by: { $0.timestamp < $1.timestamp }) {
-            let g = gameSeconds(period: event.periodNumber, elapsed: event.elapsedSeconds)
+    /// Sin bin / send off: log the discipline event, then — if the player is on
+    /// the field — remove them and log a paired `.substitutionOut` at the same
+    /// time, so `minutesPlayedSeconds()` needs no special case.
+    func logDiscipline(_ action: DisciplineAction, player: SquadPlayer?, in context: ModelContext) {
+        logEvent(.discipline, player: player, detail: action.label, actionCode: action.code, in: context)
+        guard let player, action.removal != .none, isOnField(player) else { return }
+        removeFromOnField(player)
+        logEvent(.substitutionOut, player: player, detail: "Off — \(action.label)", in: context)
+    }
+
+    func resetClock(in context: ModelContext) {
+        let previous = currentElapsedSeconds()
+        resetClock()
+        logEvent(.note, detail: "Clock reset (was \(formatClock(remainingSeconds(at: previous))) remaining)", in: context)
+    }
+
+    func advancePeriod(in context: ModelContext) {
+        stopClock()
+        logEvent(.periodAdvance, detail: "End of \(periodLabel)", in: context)
+        moveToNextPeriod()
+    }
+
+    func endFixture(in context: ModelContext) {
+        stopClock()
+        logEvent(.fixtureEnd, detail: "Final: \(teamScore) – \(opponentScore)", in: context)
+        markEnded()
+    }
+}
+
+extension Fixture: TimedMatch {
+    var playingTimeEvents: [PlayingTimeEvent] {
+        events.map { event in
+            let kind: PlayingTimeEvent.Kind
             switch event.eventKind {
-            case .substitutionIn:
-                guard let playerID = event.playerID else { continue }
-                intervalStart[playerID] = g
-            case .substitutionOut:
-                guard let playerID = event.playerID, let start = intervalStart.removeValue(forKey: playerID) else { continue }
-                totals[playerID, default: 0] += max(0, g - start)
-            case .fixtureEnd:
-                for (playerID, start) in intervalStart {
-                    totals[playerID, default: 0] += max(0, g - start)
-                }
-                intervalStart.removeAll()
-            default:
-                break
+            case .substitutionIn: kind = .subIn
+            case .substitutionOut: kind = .subOut
+            case .fixtureEnd: kind = .matchEnd
+            default: kind = .other
             }
+            return PlayingTimeEvent(kind: kind, playerID: event.playerID, periodNumber: event.periodNumber, elapsedSeconds: event.elapsedSeconds, timestamp: event.timestamp)
         }
-
-        if !isEnded {
-            let liveGameSeconds = gameSeconds(period: currentPeriod, elapsed: currentElapsedSeconds())
-            for (playerID, start) in intervalStart {
-                totals[playerID, default: 0] += max(0, liveGameSeconds - start)
-            }
-        }
-
-        return totals
     }
 }

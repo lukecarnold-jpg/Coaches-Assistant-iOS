@@ -121,9 +121,6 @@ struct FixtureEventHistoryView: View {
     }
 
     private func periodTimeLabel(_ event: FixtureEvent) -> String {
-        let m = event.elapsedSeconds / 60
-        let s = event.elapsedSeconds % 60
-        let label = fixture.periodFormat == "quarters" ? "Q\(event.periodNumber)" : "H\(event.periodNumber)"
-        return "\(label) \(String(format: "%02d:%02d", m, s))"
+        "\(fixture.shortPeriodLabel(forPeriod: event.periodNumber)) \(formatClock(event.elapsedSeconds))"
     }
 }

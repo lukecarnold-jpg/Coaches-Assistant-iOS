@@ -6,7 +6,7 @@ final class Game {
     var gameID: UUID
     var date: Date
     var opponentName: String
-    var periodFormat: String  // "quarters" or "halves"
+    var periodFormat: String  // PeriodFormat raw value
     var periodLengthMinutes: Int
     var currentPeriod: Int
     var teamScore: Int
@@ -50,42 +50,8 @@ final class Game {
         self.clockStartedAt = nil
     }
 
-    var totalPeriods: Int {
-        periodFormat == "quarters" ? 4 : 2
-    }
-
-    var periodLengthSeconds: Int {
-        periodLengthMinutes * 60
-    }
-
-    var periodLabel: String {
-        if periodFormat == "quarters" {
-            switch currentPeriod {
-            case 1: return "1st Quarter"
-            case 2: return "2nd Quarter"
-            case 3: return "3rd Quarter"
-            case 4: return "4th Quarter"
-            default: return "OT \(currentPeriod - 4)"
-            }
-        } else {
-            switch currentPeriod {
-            case 1: return "1st Half"
-            case 2: return "2nd Half"
-            default: return "OT \(currentPeriod - 2)"
-            }
-        }
-    }
-
-    func currentElapsedSeconds() -> Int {
-        if clockIsRunning, let startedAt = clockStartedAt {
-            return elapsedSeconds + Int(Date().timeIntervalSince(startedAt))
-        }
-        return elapsedSeconds
-    }
-
-    func remainingSeconds(at elapsed: Int) -> Int {
-        max(0, periodLengthSeconds - elapsed)
-    }
+    /// Players required on court, from Basketball's sport rules.
+    static var requiredOnCourtCount: Int { Sport.basketball.rules.onFieldCount }
 
     // MARK: - Lineup helpers
 
@@ -102,54 +68,72 @@ final class Game {
         onCourtPlayerIDs.removeAll { $0 == player.playerID.uuidString }
     }
 
-    // MARK: - Playing time
+    // MARK: - Event logging
 
-    /// Total seconds each player has spent on court, reconstructed from the substitution
-    /// event log rather than tracked live — so it stays correct even if events are edited
-    /// or deleted after the fact.
-    ///
-    /// Cumulative "game seconds" (as opposed to per-period `elapsedSeconds`) are derived
-    /// from `periodNumber`/`elapsedSeconds` on each event, assuming a fixed period length.
-    func minutesPlayedSeconds() -> [UUID: Int] {
-        var totals: [UUID: Int] = [:]
-        var intervalStart: [UUID: Int] = [:]
+    /// Creates, inserts and attaches an event stamped with the current period/clock.
+    @discardableResult
+    func logEvent(_ type: GameEventType, player: Player? = nil, detail: String = "", scoreDelta: Int = 0, in context: ModelContext) -> GameEvent {
+        let event = GameEvent(
+            game: self,
+            eventType: type,
+            playerID: player?.playerID,
+            playerName: player?.name ?? "",
+            detail: detail,
+            periodNumber: currentPeriod,
+            elapsedSeconds: currentElapsedSeconds(),
+            scoreDelta: scoreDelta
+        )
+        context.insert(event)
+        events.append(event)
+        return event
+    }
 
-        func gameSeconds(period: Int, elapsed: Int) -> Int {
-            max(0, period - 1) * periodLengthSeconds + elapsed
-        }
+    /// Adds points for our team, optionally crediting a scorer.
+    func logTeamScore(points: Int, player: Player?, in context: ModelContext) {
+        let applied = applyScore(team: true, delta: points)
+        guard applied != 0 else { return }
+        logEvent(.teamScore, player: player, detail: "+\(applied)", scoreDelta: applied, in: context)
+    }
 
-        for idString in startingLineupIDs {
-            if let id = UUID(uuidString: idString) {
-                intervalStart[id] = 0
-            }
-        }
+    /// Manual score correction (e.g. the scoreboard "−" button). Logs nothing if the
+    /// score was already 0.
+    func adjustScore(team: Bool, delta: Int, in context: ModelContext) {
+        let applied = applyScore(team: team, delta: delta)
+        guard applied != 0 else { return }
+        let detail = applied > 0 ? "+\(applied)" : "\(applied)"
+        logEvent(team ? .teamScore : .opponentScore, detail: detail, scoreDelta: applied, in: context)
+    }
 
-        for event in events.sorted(by: { $0.timestamp < $1.timestamp }) {
-            let g = gameSeconds(period: event.periodNumber, elapsed: event.elapsedSeconds)
+    func resetClock(in context: ModelContext) {
+        let previous = currentElapsedSeconds()
+        resetClock()
+        logEvent(.note, detail: "Clock reset (was \(formatClock(remainingSeconds(at: previous))) remaining)", in: context)
+    }
+
+    func advancePeriod(in context: ModelContext) {
+        stopClock()
+        logEvent(.periodAdvance, detail: "End of \(periodLabel)", in: context)
+        moveToNextPeriod()
+    }
+
+    func endGame(in context: ModelContext) {
+        stopClock()
+        logEvent(.gameEnd, detail: "Final: \(teamScore) – \(opponentScore)", in: context)
+        markEnded()
+    }
+}
+
+extension Game: TimedMatch {
+    var playingTimeEvents: [PlayingTimeEvent] {
+        events.map { event in
+            let kind: PlayingTimeEvent.Kind
             switch event.eventKind {
-            case .substitutionIn:
-                guard let playerID = event.playerID else { continue }
-                intervalStart[playerID] = g
-            case .substitutionOut:
-                guard let playerID = event.playerID, let start = intervalStart.removeValue(forKey: playerID) else { continue }
-                totals[playerID, default: 0] += max(0, g - start)
-            case .gameEnd:
-                for (playerID, start) in intervalStart {
-                    totals[playerID, default: 0] += max(0, g - start)
-                }
-                intervalStart.removeAll()
-            default:
-                break
+            case .substitutionIn: kind = .subIn
+            case .substitutionOut: kind = .subOut
+            case .gameEnd: kind = .matchEnd
+            default: kind = .other
             }
+            return PlayingTimeEvent(kind: kind, playerID: event.playerID, periodNumber: event.periodNumber, elapsedSeconds: event.elapsedSeconds, timestamp: event.timestamp)
         }
-
-        if !isEnded {
-            let liveGameSeconds = gameSeconds(period: currentPeriod, elapsed: currentElapsedSeconds())
-            for (playerID, start) in intervalStart {
-                totals[playerID, default: 0] += max(0, liveGameSeconds - start)
-            }
-        }
-
-        return totals
     }
 }

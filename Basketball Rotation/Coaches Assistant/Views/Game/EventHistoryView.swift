@@ -116,9 +116,6 @@ struct EventHistoryView: View {
     }
 
     private func periodTimeLabel(_ event: GameEvent) -> String {
-        let m = event.elapsedSeconds / 60
-        let s = event.elapsedSeconds % 60
-        let label = game.periodFormat == "quarters" ? "Q\(event.periodNumber)" : "H\(event.periodNumber)"
-        return "\(label) \(String(format: "%02d:%02d", m, s))"
+        "\(game.shortPeriodLabel(forPeriod: event.periodNumber)) \(formatClock(event.elapsedSeconds))"
     }
 }

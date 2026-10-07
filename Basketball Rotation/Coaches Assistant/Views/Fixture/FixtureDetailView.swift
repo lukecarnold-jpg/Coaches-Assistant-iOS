@@ -6,10 +6,10 @@ import SwiftData
 /// `GameDetailView`) unchanged. The scoreboard's "+" buttons open the
 /// rules-driven `ScoreSheet` for both team and opponent instead of a
 /// hardcoded 1/2/3 picker, and "Foul" becomes "Discipline", wired through
-/// `DisciplineSheet` with sin-bin/send-off removal handled inline.
+/// `DisciplineSheet` with sin-bin/send-off removal handled by `Fixture.logDiscipline`.
+/// Scoreboard, clock, banners and notes are the shared `MatchComponents`.
 struct FixtureDetailView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Query private var allPlayers: [SquadPlayer]
 
     @Bindable var fixture: Fixture
@@ -21,11 +21,8 @@ struct FixtureDetailView: View {
     @State private var showPlayingTime = false
     @State private var showDisciplineSheet = false
     @State private var showMVPPicker = false
-    @State private var showManualClock = false
     @State private var showAdvancePeriodConfirm = false
     @State private var showEndFixtureConfirm = false
-    @State private var manualMinutes = ""
-    @State private var manualSeconds = ""
     @State private var showTeamScoreSheet = false
     @State private var showOpponentScoreSheet = false
 
@@ -44,7 +41,8 @@ struct FixtureDetailView: View {
     }
 
     var onFieldPlayers: [SquadPlayer] {
-        allPlayers.filter { fixture.onFieldPlayerIDs.contains($0.playerID.uuidString) }
+        let onField = Set(fixture.onFieldPlayerIDs)
+        return allPlayers.filter { onField.contains($0.playerID.uuidString) }
     }
 
     /// Present players who haven't been sent off — the actual pool substitutions
@@ -60,32 +58,32 @@ struct FixtureDetailView: View {
         !fixture.isEnded && eligiblePlayers.count <= rules.onFieldCount
     }
 
-    var noSubstitutesMessage: String {
-        if eligiblePlayers.count < rules.onFieldCount {
-            return "Only \(eligiblePlayers.count) of \(rules.onFieldCount) players available — no bench to substitute from."
-        }
-        return "Exactly \(rules.onFieldCount) players available — no bench to substitute from."
-    }
-
-    var sortedEvents: [FixtureEvent] {
-        fixture.events.sorted { $0.timestamp > $1.timestamp }
-    }
-
     var body: some View {
+        let recentEvents = Array(fixture.events.sorted { $0.timestamp > $1.timestamp }.prefix(5))
+
         ScrollView {
             VStack(spacing: 16) {
-                scoreBoard
-                clockSection
+                MatchScoreboard(
+                    match: fixture,
+                    tint: sport.tint,
+                    onTeamMinus: { fixture.adjustScore(team: true, delta: -1, in: modelContext) },
+                    onTeamPlus: { showTeamScoreSheet = true },
+                    onOpponentMinus: { fixture.adjustScore(team: false, delta: -1, in: modelContext) },
+                    onOpponentPlus: { showOpponentScoreSheet = true }
+                )
+                MatchClockSection(match: fixture) {
+                    fixture.resetClock(in: modelContext)
+                }
                 if fixture.onFieldPlayerIDs.isEmpty && !fixture.isEnded {
-                    lineupBanner
+                    LineupBanner(starterCount: rules.onFieldCount) { showLineupSetup = true }
                 }
                 if hasNoSubstitutesAvailable {
-                    noSubstitutesBanner
+                    NoSubstitutesBanner(availableCount: eligiblePlayers.count, requiredCount: rules.onFieldCount)
                 }
                 actionsSection
                 onFieldSection
-                notesSection
-                recentEventsSection
+                CoachingNotesSection(text: $fixture.notes)
+                recentEventsSection(recentEvents)
             }
             .padding()
             .frame(maxWidth: 760)
@@ -93,6 +91,7 @@ struct FixtureDetailView: View {
         }
         .navigationTitle("vs \(fixture.opponentName)")
         .navigationBarTitleDisplayMode(.inline)
+        .keepsScreenAwake(fixture.isGameDayModeActive && !fixture.isEnded)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -105,20 +104,22 @@ struct FixtureDetailView: View {
                     Button { showPlayingTime = true } label: {
                         Label("Playing Time", systemImage: "stopwatch")
                     }
-                    Divider()
-                    if let csvURL = generateFixtureCSVURL() {
-                        ShareLink(item: csvURL, preview: SharePreview(csvURL.lastPathComponent, image: Image(systemName: "tablecells"))) {
-                            Label("Export Events CSV", systemImage: "tablecells")
+                    if !fixture.isEnded {
+                        Toggle(isOn: $fixture.isGameDayModeActive) {
+                            Label("Game Day Mode", systemImage: "sun.max")
                         }
                     }
-                    if let txtURL = generateNotesTXTURL() {
-                        ShareLink(item: txtURL, preview: SharePreview(txtURL.lastPathComponent, image: Image(systemName: "doc.text"))) {
-                            Label("Export Notes TXT", systemImage: "doc.text")
-                        }
+                    Divider()
+                    ShareLink(item: eventsExport, preview: SharePreview(eventsExport.filename, image: Image(systemName: "tablecells"))) {
+                        Label("Export Events CSV", systemImage: "tablecells")
+                    }
+                    ShareLink(item: notesExport, preview: SharePreview(notesExport.filename, image: Image(systemName: "doc.text"))) {
+                        Label("Export Notes TXT", systemImage: "doc.text")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
+                .accessibilityLabel("More options")
             }
         }
         .sheet(isPresented: $showLineupSetup) {
@@ -138,224 +139,42 @@ struct FixtureDetailView: View {
         }
         .sheet(isPresented: $showDisciplineSheet) {
             DisciplineSheet(sport: sport, players: presentPlayers) { player, action in
-                logDiscipline(player: player, action: action)
+                fixture.logDiscipline(action, player: player, in: modelContext)
             }
         }
         .sheet(isPresented: $showMVPPicker) {
             SquadPlayerPickerSheet(title: "MVP Vote", players: presentPlayers) { player in
-                logEvent(type: .mvpVote, player: player, detail: "MVP Vote")
-            }
-        }
-        .sheet(isPresented: $showManualClock) {
-            ManualClockView(minutes: $manualMinutes, seconds: $manualSeconds) {
-                applyManualTime()
+                fixture.logEvent(.mvpVote, player: player, detail: "MVP Vote", in: modelContext)
             }
         }
         .sheet(isPresented: $showTeamScoreSheet) {
             ScoreSheet(sport: sport, title: "Team Score", players: onFieldPlayers.isEmpty ? presentPlayers : onFieldPlayers) { player, action in
-                logTeamScore(player: player, action: action)
+                fixture.logScore(team: true, action: action, player: player, in: modelContext)
             }
         }
         .sheet(isPresented: $showOpponentScoreSheet) {
             ScoreSheet(sport: sport, title: "\(fixture.opponentName) Score", players: [], showScorer: false) { _, action in
-                logOpponentScore(action: action)
+                fixture.logScore(team: false, action: action, player: nil, in: modelContext)
             }
         }
         .confirmationDialog("Advance Period", isPresented: $showAdvancePeriodConfirm) {
-            Button("Advance to \(nextPeriodLabel())") {
-                advancePeriod()
+            Button("Advance to \(fixture.periodLabel(forPeriod: fixture.currentPeriod + 1))") {
+                fixture.advancePeriod(in: modelContext)
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will end the current period and start the next one.")
+            Text(fixture.currentPeriod >= fixture.totalPeriods
+                 ? "Regulation time is over. This starts an overtime period."
+                 : "This will end the current period and start the next one.")
         }
         .confirmationDialog("End Fixture", isPresented: $showEndFixtureConfirm) {
             Button("End Fixture", role: .destructive) {
-                endFixture()
+                fixture.endFixture(in: modelContext)
             }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Final score: \(fixture.teamScore) – \(fixture.opponentScore)")
         }
-    }
-
-    // MARK: - Score Board
-
-    var scoreBoard: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Text(fixture.isEnded ? "Final" : fixture.periodLabel)
-                    .font(.caption.bold())
-                    .foregroundStyle(fixture.isEnded ? Color.gray : sport.tint)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 3)
-                    .background(fixture.isEnded ? Color.gray.opacity(0.15) : sport.tint.opacity(0.1), in: Capsule())
-            }
-
-            HStack(spacing: 0) {
-                VStack(spacing: 4) {
-                    Text("US")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("\(fixture.teamScore)")
-                        .font(.system(size: horizontalSizeClass == .compact ? 46 : 58, weight: .bold, design: .rounded))
-                    if !fixture.isEnded {
-                        HStack(spacing: 8) {
-                            Button { adjustScore(team: true, delta: -1) } label: {
-                                Image(systemName: "minus.circle.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Button { showTeamScoreSheet = true } label: {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(sport.tint)
-                            }
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity)
-
-                Text("–")
-                    .font(.title)
-                    .foregroundStyle(.secondary)
-
-                VStack(spacing: 4) {
-                    Text(fixture.opponentName)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    Text("\(fixture.opponentScore)")
-                        .font(.system(size: horizontalSizeClass == .compact ? 46 : 58, weight: .bold, design: .rounded))
-                    if !fixture.isEnded {
-                        HStack(spacing: 8) {
-                            Button { adjustScore(team: false, delta: -1) } label: {
-                                Image(systemName: "minus.circle.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Button { showOpponentScoreSheet = true } label: {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(.orange)
-                            }
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            }
-        }
-        .padding()
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-    }
-
-    // MARK: - Clock Section
-
-    var clockSection: some View {
-        TimelineView(.periodic(from: .now, by: 1.0)) { _ in
-            let elapsed = fixture.currentElapsedSeconds()
-            let remaining = fixture.remainingSeconds(at: elapsed)
-            VStack(spacing: 8) {
-                HStack {
-                    VStack {
-                        Text(formatTime(remaining))
-                            .font(.system(size: horizontalSizeClass == .compact ? 30 : 40, weight: .bold, design: .monospaced))
-                        Text("Remaining")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-
-                    Divider().frame(height: horizontalSizeClass == .compact ? 42 : 56)
-
-                    VStack {
-                        Text(formatTime(elapsed))
-                            .font(.system(size: horizontalSizeClass == .compact ? 30 : 40, weight: .bold, design: .monospaced))
-                        Text("Elapsed")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-
-                if !fixture.isEnded {
-                    HStack(spacing: 16) {
-                        Button {
-                            toggleClock()
-                        } label: {
-                            Label(fixture.clockIsRunning ? "Stop" : "Start", systemImage: fixture.clockIsRunning ? "stop.fill" : "play.fill")
-                                .font(.headline)
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(fixture.clockIsRunning ? .red : .green)
-
-                        Button {
-                            resetClock()
-                        } label: {
-                            Image(systemName: "arrow.counterclockwise")
-                                .font(.title2)
-                        }
-                        .buttonStyle(.bordered)
-
-                        Button {
-                            prepareManualClock(elapsed: elapsed)
-                            showManualClock = true
-                        } label: {
-                            Image(systemName: "pencil")
-                                .font(.title2)
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                }
-            }
-            .padding()
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-        }
-    }
-
-    // MARK: - Lineup Banner
-
-    var lineupBanner: some View {
-        Button { showLineupSetup = true } label: {
-            HStack {
-                Image(systemName: "person.3.fill")
-                    .foregroundStyle(.orange)
-                VStack(alignment: .leading) {
-                    Text("Set Starting Lineup")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                    Text("Tap to select your \(rules.onFieldCount) starters")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .foregroundStyle(.tertiary)
-            }
-            .padding()
-            .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
-        }
-    }
-
-    // MARK: - No Substitutes Banner
-
-    var noSubstitutesBanner: some View {
-        HStack {
-            Image(systemName: "person.2.slash.fill")
-                .foregroundStyle(.orange)
-            VStack(alignment: .leading) {
-                Text(eligiblePlayers.count < rules.onFieldCount ? "Playing Short-Handed" : "No Substitutes Available")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                Text(noSubstitutesMessage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-        .padding()
-        .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
     }
 
     // MARK: - Actions Section
@@ -372,10 +191,8 @@ struct FixtureDetailView: View {
                 ActionButton(title: "Sub", icon: "arrow.left.arrow.right", color: .purple, isDisabled: hasNoSubstitutesAvailable) {
                     showSubstitution = true
                 }
-                if fixture.currentPeriod < fixture.totalPeriods {
-                    ActionButton(title: "Next Period", icon: "forward.end.fill", color: .blue) {
-                        showAdvancePeriodConfirm = true
-                    }
+                ActionButton(title: fixture.currentPeriod >= fixture.totalPeriods ? "Overtime" : "Next Period", icon: "forward.end.fill", color: .blue) {
+                    showAdvancePeriodConfirm = true
                 }
                 ActionButton(title: "End Fixture", icon: "flag.checkered", color: .gray) {
                     showEndFixtureConfirm = true
@@ -386,64 +203,51 @@ struct FixtureDetailView: View {
 
     // MARK: - On Field Section
 
+    @ViewBuilder
     var onFieldSection: some View {
-        Group {
-            if !onFieldPlayers.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text(rules.onFieldTerm)
-                            .font(.headline)
-                        Spacer()
-                        if !fixture.isEnded {
-                            Button("Lineup") { showLineupSetup = true }
-                                .font(.caption)
-                        }
-                    }
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 8)], spacing: 8) {
-                        ForEach(onFieldPlayers) { player in
-                            HStack {
-                                Image(systemName: rules.systemImage)
-                                    .foregroundStyle(sport.tint)
-                                Text(player.displayName)
-                                    .font(.subheadline)
-                                    .lineLimit(1)
-                                if let position = fixture.position(for: player.playerID) {
-                                    Text(position.code)
-                                        .font(.caption2.bold())
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(sport.tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-                        }
+        if !onFieldPlayers.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(rules.onFieldTerm)
+                        .font(.headline)
+                    Spacer()
+                    if !fixture.isEnded {
+                        Button("Lineup") { showLineupSetup = true }
+                            .font(.caption)
                     }
                 }
-                .padding()
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 8)], spacing: 8) {
+                    ForEach(onFieldPlayers) { player in
+                        HStack {
+                            Image(systemName: rules.systemImage)
+                                .foregroundStyle(sport.tint)
+                                .accessibilityHidden(true)
+                            Text(player.displayName)
+                                .font(.subheadline)
+                                .lineLimit(1)
+                            if let position = fixture.position(for: player.playerID) {
+                                Text(position.code)
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityLabel(position.name)
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(sport.tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                        .accessibilityElement(children: .combine)
+                    }
+                }
             }
+            .padding()
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
         }
-    }
-
-    // MARK: - Notes Section
-
-    var notesSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Coaching Notes")
-                .font(.headline)
-            TextEditor(text: $fixture.notes)
-                .frame(minHeight: horizontalSizeClass == .compact ? 80 : 120)
-                .padding(4)
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 8))
-        }
-        .padding()
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
     }
 
     // MARK: - Recent Events Section
 
-    var recentEventsSection: some View {
+    func recentEventsSection(_ events: [FixtureEvent]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Recent Events")
@@ -452,14 +256,14 @@ struct FixtureDetailView: View {
                 Button("See All") { showEventHistory = true }
                     .font(.caption)
             }
-            if sortedEvents.isEmpty {
+            if events.isEmpty {
                 Text("No events yet")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 8)
             } else {
-                ForEach(sortedEvents.prefix(5)) { event in
+                ForEach(events) { event in
                     FixtureEventRowView(event: event, sport: sport)
                 }
             }
@@ -468,178 +272,33 @@ struct FixtureDetailView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
     }
 
-    // MARK: - Actions
+    // MARK: - Exports
 
-    private func logTeamScore(player: SquadPlayer?, action: ScoringAction) {
-        fixture.teamScore += action.points
-        logEvent(type: .teamScore, player: player, detail: action.label, actionCode: action.code, scoreDelta: action.points)
+    private var exportPrefix: String {
+        MatchExport.safeFilenameComponent(sport.rules.displayName)
     }
 
-    private func logOpponentScore(action: ScoringAction) {
-        fixture.opponentScore += action.points
-        logEvent(type: .opponentScore, player: nil, detail: action.label, actionCode: action.code, scoreDelta: action.points)
-    }
-
-    /// Sin bin / send off: log the discipline event, then — if the player is on
-    /// the field — remove them and log a paired `.substitutionOut` at the same
-    /// time. `Fixture.minutesPlayedSeconds()` needs no special case as a result.
-    private func logDiscipline(player: SquadPlayer?, action: DisciplineAction) {
-        let elapsed = fixture.currentElapsedSeconds()
-        let event = FixtureEvent(
-            fixture: fixture,
-            eventType: .discipline,
-            actionCode: action.code,
-            playerID: player?.playerID,
-            playerName: player?.name ?? "",
-            detail: action.label,
-            periodNumber: fixture.currentPeriod,
-            elapsedSeconds: elapsed
+    private var eventsExport: CSVExportFile {
+        let rows = fixture.events.sorted { $0.timestamp < $1.timestamp }.map { event in
+            MatchExport.EventRow(
+                period: fixture.shortPeriodLabel(forPeriod: event.periodNumber),
+                time: formatClock(event.elapsedSeconds),
+                event: event.displayName(opponentName: fixture.opponentName),
+                player: event.playerName,
+                detail: event.detail
+            )
+        }
+        return CSVExportFile(
+            filename: MatchExport.filename(prefix: "\(exportPrefix)_Events", opponentName: fixture.opponentName, ext: "csv"),
+            content: MatchExport.eventsCSV(rows: rows, notes: fixture.notes)
         )
-        modelContext.insert(event)
-        fixture.events.append(event)
+    }
 
-        guard let player, action.removal != .none, fixture.onFieldPlayerIDs.contains(player.playerID.uuidString) else { return }
-
-        fixture.onFieldPlayerIDs.removeAll { $0 == player.playerID.uuidString }
-        let subOut = FixtureEvent(
-            fixture: fixture,
-            eventType: .substitutionOut,
-            playerID: player.playerID,
-            playerName: player.name,
-            detail: "Off — \(action.label)",
-            periodNumber: fixture.currentPeriod,
-            elapsedSeconds: elapsed
+    private var notesExport: TextExportFile {
+        TextExportFile(
+            filename: MatchExport.filename(prefix: "\(exportPrefix)_Notes", opponentName: fixture.opponentName, ext: "txt"),
+            content: MatchExport.notesText(title: "Fixture Notes", opponentName: fixture.opponentName, date: fixture.date, notes: fixture.notes)
         )
-        modelContext.insert(subOut)
-        fixture.events.append(subOut)
-    }
-
-    private func adjustScore(team: Bool, delta: Int) {
-        let previous = team ? fixture.teamScore : fixture.opponentScore
-        let clamped = max(0, previous + delta)
-        let appliedDelta = clamped - previous
-        if team {
-            fixture.teamScore = clamped
-            logEvent(type: .teamScore, player: nil, detail: appliedDelta > 0 ? "+\(appliedDelta)" : "\(appliedDelta)", scoreDelta: appliedDelta)
-        } else {
-            fixture.opponentScore = clamped
-            logEvent(type: .opponentScore, player: nil, detail: appliedDelta > 0 ? "+\(appliedDelta)" : "\(appliedDelta)", scoreDelta: appliedDelta)
-        }
-    }
-
-    private func toggleClock() {
-        if fixture.clockIsRunning {
-            fixture.elapsedSeconds = fixture.currentElapsedSeconds()
-            fixture.clockIsRunning = false
-            fixture.clockStartedAt = nil
-        } else {
-            fixture.clockIsRunning = true
-            fixture.clockStartedAt = Date()
-        }
-    }
-
-    private func resetClock() {
-        fixture.elapsedSeconds = 0
-        fixture.clockIsRunning = false
-        fixture.clockStartedAt = nil
-    }
-
-    private func prepareManualClock(elapsed: Int) {
-        let remaining = fixture.remainingSeconds(at: elapsed)
-        manualMinutes = String(remaining / 60)
-        manualSeconds = String(remaining % 60)
-    }
-
-    private func applyManualTime() {
-        let mins = Int(manualMinutes) ?? 0
-        let secs = Int(manualSeconds) ?? 0
-        let remainingTarget = mins * 60 + secs
-        let newElapsed = max(0, fixture.periodLengthSeconds - remainingTarget)
-        fixture.elapsedSeconds = newElapsed
-        fixture.clockIsRunning = false
-        fixture.clockStartedAt = nil
-    }
-
-    private func advancePeriod() {
-        stopClock()
-        let event = FixtureEvent(fixture: fixture, eventType: .periodAdvance, detail: "End of \(fixture.periodLabel)", periodNumber: fixture.currentPeriod, elapsedSeconds: fixture.elapsedSeconds)
-        modelContext.insert(event)
-        fixture.events.append(event)
-        fixture.currentPeriod += 1
-        fixture.elapsedSeconds = 0
-    }
-
-    private func endFixture() {
-        stopClock()
-        fixture.isEnded = true
-        fixture.isGameDayModeActive = false
-        let event = FixtureEvent(fixture: fixture, eventType: .fixtureEnd, detail: "Final: \(fixture.teamScore) – \(fixture.opponentScore)", periodNumber: fixture.currentPeriod, elapsedSeconds: fixture.elapsedSeconds)
-        modelContext.insert(event)
-        fixture.events.append(event)
-    }
-
-    private func stopClock() {
-        if fixture.clockIsRunning {
-            fixture.elapsedSeconds = fixture.currentElapsedSeconds()
-            fixture.clockIsRunning = false
-            fixture.clockStartedAt = nil
-        }
-    }
-
-    private func logEvent(type: FixtureEventType, player: SquadPlayer?, detail: String, actionCode: String = "", scoreDelta: Int = 0) {
-        let event = FixtureEvent(
-            fixture: fixture,
-            eventType: type,
-            actionCode: actionCode,
-            playerID: player?.playerID,
-            playerName: player?.name ?? "",
-            detail: detail,
-            periodNumber: fixture.currentPeriod,
-            elapsedSeconds: fixture.currentElapsedSeconds(),
-            scoreDelta: scoreDelta
-        )
-        modelContext.insert(event)
-        fixture.events.append(event)
-    }
-
-    private func nextPeriodLabel() -> String {
-        fixture.periodLabel(forPeriod: fixture.currentPeriod + 1)
-    }
-
-    private func generateFixtureCSVURL() -> URL? {
-        var lines = ["Period,Time,Event,Player,Detail"]
-        for event in fixture.events.sorted(by: { $0.timestamp < $1.timestamp }) {
-            let time = formatTime(event.elapsedSeconds)
-            let player = event.playerName.isEmpty ? "" : event.playerName
-            let detail = event.detail.replacingOccurrences(of: ",", with: " ")
-            let eventName = event.displayName(opponentName: fixture.opponentName)
-            lines.append("\(event.periodNumber),\(time),\(eventName),\(player),\(detail)")
-        }
-        if !fixture.notes.isEmpty {
-            lines.append("")
-            lines.append("Coaching Notes")
-            lines.append(fixture.notes.replacingOccurrences(of: "\n", with: " "))
-        }
-        let content = lines.joined(separator: "\n")
-        let safeSport = sport.rules.displayName.replacingOccurrences(of: " ", with: "_")
-        let safeOpponent = fixture.opponentName.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "[^a-zA-Z0-9_\\-]", with: "_", options: .regularExpression)
-        let filename = safeOpponent.isEmpty ? "\(safeSport)_Events.csv" : "\(safeSport)_Events_vs_\(safeOpponent).csv"
-        return RosterCSV.createTemporaryFile(filename: filename, content: content)
-    }
-
-    private func generateNotesTXTURL() -> URL? {
-        let header = "Fixture Notes – vs \(fixture.opponentName) – \(fixture.date.formatted(date: .long, time: .omitted))\n\n"
-        let content = header + (fixture.notes.isEmpty ? "No notes." : fixture.notes)
-        let safeSport = sport.rules.displayName.replacingOccurrences(of: " ", with: "_")
-        let safeOpponent = fixture.opponentName.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "[^a-zA-Z0-9_\\-]", with: "_", options: .regularExpression)
-        let filename = safeOpponent.isEmpty ? "\(safeSport)_Notes.txt" : "\(safeSport)_Notes_vs_\(safeOpponent).txt"
-        return RosterCSV.createTemporaryFile(filename: filename, content: content)
-    }
-
-    func formatTime(_ seconds: Int) -> String {
-        let m = seconds / 60
-        let s = seconds % 60
-        return String(format: "%02d:%02d", m, s)
     }
 }
 
@@ -655,6 +314,7 @@ struct FixtureEventRowView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(width: 20)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text(event.displayName(opponentName: event.fixture?.opponentName ?? ""))
@@ -672,11 +332,12 @@ struct FixtureEventRowView: View {
                 }
             }
             Spacer()
-            Text("P\(event.periodNumber)")
+            Text(event.fixture?.shortPeriodLabel(forPeriod: event.periodNumber) ?? "\(event.periodNumber)")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
     }
 }
 

@@ -3,7 +3,7 @@ import Foundation
 /// One of the sports the app can track. Basketball's own models/views never read
 /// this type — it exists only to drive Basketball's landing tile and the shared
 /// drill prompt. Everything else here backs the non-Basketball sports.
-enum Sport: String, CaseIterable, Identifiable, Hashable, Codable {
+nonisolated enum Sport: String, CaseIterable, Identifiable, Hashable, Codable {
     case basketball
     case netball
     case soccer
@@ -451,20 +451,20 @@ enum Sport: String, CaseIterable, Identifiable, Hashable, Codable {
 }
 
 /// How a discipline action removes a player from play.
-enum Removal: Hashable {
+nonisolated enum Removal: Hashable {
     case none
     case temporary(seconds: Int)
     case permanent
 }
 
-struct ScoringAction: Identifiable, Hashable {
+nonisolated struct ScoringAction: Identifiable, Hashable {
     let code: String
     let label: String
     let points: Int
     var id: String { code }
 }
 
-struct DisciplineAction: Identifiable, Hashable {
+nonisolated struct DisciplineAction: Identifiable, Hashable {
     let code: String
     let label: String
     let systemImage: String
@@ -472,7 +472,7 @@ struct DisciplineAction: Identifiable, Hashable {
     var id: String { code }
 }
 
-struct Position: Identifiable, Hashable {
+nonisolated struct Position: Identifiable, Hashable {
     let code: String
     let name: String
     var id: String { code }
@@ -480,7 +480,7 @@ struct Position: Identifiable, Hashable {
 
 /// Per-sport configuration: squad size, period structure, terminology, scoring,
 /// discipline vocabulary and (optional) on-field positions.
-struct SportRules {
+nonisolated struct SportRules {
     let displayName: String
     let systemImage: String
     let onFieldCount: Int

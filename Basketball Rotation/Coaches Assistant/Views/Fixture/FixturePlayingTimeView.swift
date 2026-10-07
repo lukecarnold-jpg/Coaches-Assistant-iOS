@@ -35,6 +35,7 @@ struct FixturePlayingTimeView: View {
                                     Circle()
                                         .fill(.green)
                                         .frame(width: 8, height: 8)
+                                        .accessibilityLabel("Currently playing")
                                 }
                                 Text(row.player.displayName)
                             }

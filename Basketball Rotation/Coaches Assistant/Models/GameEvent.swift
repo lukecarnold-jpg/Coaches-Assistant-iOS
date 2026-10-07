@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-enum GameEventType: String, CaseIterable {
+nonisolated enum GameEventType: String, CaseIterable {
     case substitutionIn  = "Sub In"
     case substitutionOut = "Sub Out"
     case foul            = "Foul"

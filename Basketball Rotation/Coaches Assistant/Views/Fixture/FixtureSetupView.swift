@@ -33,8 +33,9 @@ struct FixtureSetupView: View {
 
                 Section("Period Format") {
                     Picker("Format", selection: $periodFormat) {
-                        Text("Quarters").tag("quarters")
-                        Text("Halves").tag("halves")
+                        ForEach(PeriodFormat.allCases) { format in
+                            Text(format.title).tag(format.rawValue)
+                        }
                     }
                     .pickerStyle(.segmented)
 

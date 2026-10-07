@@ -7,8 +7,8 @@ struct GameSetupView: View {
     @Query(sort: \Player.name) private var players: [Player]
 
     @State private var opponentName = ""
-    @State private var periodFormat = "quarters"
-    @State private var periodLengthMinutes = 10
+    @State private var periodFormat = Sport.basketball.rules.periodFormat
+    @State private var periodLengthMinutes = Sport.basketball.rules.defaultPeriodMinutes
 
     var body: some View {
         NavigationStack {
@@ -19,13 +19,14 @@ struct GameSetupView: View {
 
                 Section("Period Format") {
                     Picker("Format", selection: $periodFormat) {
-                        Text("Quarters").tag("quarters")
-                        Text("Halves").tag("halves")
+                        ForEach(PeriodFormat.allCases) { format in
+                            Text(format.title).tag(format.rawValue)
+                        }
                     }
                     .pickerStyle(.segmented)
 
                     Picker("Minutes per Period", selection: $periodLengthMinutes) {
-                        ForEach(1...25, id: \.self) { minutes in
+                        ForEach(1...Sport.basketball.rules.maxPeriodMinutes, id: \.self) { minutes in
                             Text("\(minutes) minutes")
                                 .tag(minutes)
                         }
