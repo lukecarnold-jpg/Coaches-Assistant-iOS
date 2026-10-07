@@ -12,6 +12,7 @@ struct RosterView: View {
     @State private var searchText = ""
     @State private var importError: String?
     @State private var showImportError = false
+    @State private var importSummary: String?
 
     var filteredPlayers: [Player] {
         if searchText.isEmpty { return players }
@@ -56,17 +57,17 @@ struct RosterView: View {
                     Button { showImportPicker = true } label: {
                         Label("Import CSV", systemImage: "square.and.arrow.down")
                     }
-                    if let exportURL = generateExportURL() {
-                        ShareLink(item: exportURL, preview: SharePreview("Basketball_Roster.csv", image: Image(systemName: "tablecells"))) {
-                            Label("Export CSV", systemImage: "square.and.arrow.up")
-                        }
+                    ShareLink(item: rosterExport, preview: SharePreview(rosterExport.filename, image: Image(systemName: "tablecells"))) {
+                        Label("Export CSV", systemImage: "square.and.arrow.up")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
+                .accessibilityLabel("Import or export")
                 Button { showAddPlayer = true } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("Add player")
             }
         }
         .sheet(isPresented: $showAddPlayer) {
@@ -83,6 +84,11 @@ struct RosterView: View {
         } message: {
             Text(importError ?? "Unknown error")
         }
+        .alert("Import Complete", isPresented: Binding(get: { importSummary != nil }, set: { if !$0 { importSummary = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(importSummary ?? "")
+        }
     }
 
     private func deletePlayers(offsets: IndexSet) {
@@ -91,26 +97,32 @@ struct RosterView: View {
         }
     }
 
-    private func generateExportURL() -> URL? {
+    private var rosterExport: CSVExportFile {
         var lines = ["Name,Jersey Number"]
         for player in players {
             let jersey = player.jerseyNumber.map { String($0) } ?? ""
             lines.append("\(RosterCSV.escape(player.name)),\(jersey)")
         }
-        let content = lines.joined(separator: "\n")
-        return RosterCSV.createTemporaryFile(filename: "Basketball_Roster.csv", content: content)
+        return CSVExportFile(filename: "Basketball_Roster.csv", content: lines.joined(separator: "\n"))
     }
 
     private func handleImport(result: Result<URL, Error>) {
         switch result {
         case .success(let url):
-            guard url.startAccessingSecurityScopedResource() else { return }
-            defer { url.stopAccessingSecurityScopedResource() }
             do {
-                let content = try String(contentsOf: url, encoding: .utf8)
-                for parsed in RosterCSV.parse(content) {
-                    modelContext.insert(Player(name: parsed.name, jerseyNumber: parsed.jerseyNumber))
+                let content = try RosterCSV.readImportedFile(at: url)
+                let parsed = RosterCSV.parse(content)
+                guard !parsed.isEmpty else {
+                    importError = "No players were found in that file. Make sure it has a Name column."
+                    showImportError = true
+                    return
                 }
+                let existing = players.map { RosterCSV.PlayerKey(name: $0.name, jerseyNumber: $0.jerseyNumber) }
+                let plan = RosterCSV.importPlan(for: parsed, existing: existing)
+                for player in plan.toAdd {
+                    modelContext.insert(Player(name: player.name, jerseyNumber: player.jerseyNumber))
+                }
+                importSummary = RosterCSV.importSummary(plan)
             } catch {
                 importError = error.localizedDescription
                 showImportError = true
