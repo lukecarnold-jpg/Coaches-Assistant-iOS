@@ -13,7 +13,10 @@ final class Game {
     var opponentScore: Int
     var notes: String
     var isEnded: Bool
-    var isGameDayModeActive: Bool
+    // Declared with a default so SwiftData's lightweight migration can populate it
+    // on stores created before this property existed. Existing games migrate as
+    // `false`; new games opt in via `init`.
+    var isGameDayModeActive: Bool = false
 
     // Clock state
     var elapsedSeconds: Int

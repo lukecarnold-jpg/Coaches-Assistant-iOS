@@ -6,6 +6,33 @@ import SwiftData
 enum StoreRecoveryStatus {
     static var wasReset = false
     static var recoveredStoreURL: URL?
+
+    /// SQLite keeps uncommitted pages in sidecar files named by appending `-wal` /
+    /// `-shm` to the *full* store filename (e.g. `default.store-wal`). All three must
+    /// move together or the recovered copy is missing its most recent writes.
+    static let sidecarSuffixes = ["", "-wal", "-shm"]
+
+    /// Moves the store and its sidecars to `store-recovered-<timestamp>.<ext>` in the
+    /// same directory. Returns the recovered main-file URL, or nil if nothing moved.
+    @discardableResult
+    static func moveStoreAside(at storeURL: URL, timestamp: String, fileManager: FileManager = .default) -> URL? {
+        let directory = storeURL.deletingLastPathComponent()
+        let ext = storeURL.pathExtension.isEmpty ? "store" : storeURL.pathExtension
+        let recoveredURL = directory.appendingPathComponent("store-recovered-\(timestamp).\(ext)")
+        var movedMain = false
+        for suffix in sidecarSuffixes {
+            let source = URL(fileURLWithPath: storeURL.path + suffix)
+            let destination = URL(fileURLWithPath: recoveredURL.path + suffix)
+            guard fileManager.fileExists(atPath: source.path) else { continue }
+            do {
+                try fileManager.moveItem(at: source, to: destination)
+                if suffix.isEmpty { movedMain = true }
+            } catch {
+                print("Store recovery: failed to move \(source.lastPathComponent): \(error)")
+            }
+        }
+        return movedMain ? recoveredURL : nil
+    }
 }
 
 @main
@@ -33,18 +60,9 @@ struct CoachesAssistantApp: App {
             // than delete it — a failed migration should never silently destroy a
             // coach's existing data. The recovered file is left on disk for support
             // purposes; SettingsView surfaces that this happened.
-            let storeURL = config.url
+            print("ModelContainer failed to open store: \(error)")
             let timestamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
-            let recoveredURL = storeURL.deletingLastPathComponent().appendingPathComponent("store-recovered-\(timestamp).sqlite")
-            let related: [(URL, String)] = [
-                (storeURL, ".sqlite"),
-                (storeURL.deletingPathExtension().appendingPathExtension("sqlite-shm"), "-shm"),
-                (storeURL.deletingPathExtension().appendingPathExtension("sqlite-wal"), "-wal"),
-            ]
-            for (url, suffix) in related {
-                let destination = recoveredURL.deletingPathExtension().appendingPathExtension(suffix.replacingOccurrences(of: ".", with: ""))
-                try? FileManager.default.moveItem(at: url, to: destination)
-            }
+            let recoveredURL = StoreRecoveryStatus.moveStoreAside(at: config.url, timestamp: timestamp)
             StoreRecoveryStatus.wasReset = true
             StoreRecoveryStatus.recoveredStoreURL = recoveredURL
             do {

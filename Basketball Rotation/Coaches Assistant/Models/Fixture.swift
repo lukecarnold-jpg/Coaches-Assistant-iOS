@@ -18,7 +18,10 @@ final class Fixture {
     var opponentScore: Int
     var notes: String
     var isEnded: Bool
-    var isGameDayModeActive: Bool
+    // Declared with a default so SwiftData's lightweight migration can populate it
+    // on stores created before this property existed. Existing fixtures migrate as
+    // `false`; new fixtures opt in via `init`.
+    var isGameDayModeActive: Bool = false
 
     // Clock state
     var elapsedSeconds: Int
