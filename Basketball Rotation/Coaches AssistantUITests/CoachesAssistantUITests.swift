@@ -19,6 +19,13 @@ final class CoachesAssistantUITests: XCTestCase {
         return app
     }
 
+    /// First button whose label starts with `prefix` — row and banner buttons
+    /// combine their text for VoiceOver ("Set Starting Lineup, Tap to select…").
+    @MainActor
+    private func button(startingWith prefix: String, in app: XCUIApplication) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", prefix)).firstMatch
+    }
+
     @MainActor
     private func addPlayer(_ name: String, jersey: Int, in app: XCUIApplication) {
         app.buttons["Add player"].tap()
@@ -47,7 +54,7 @@ final class CoachesAssistantUITests: XCTestCase {
         for (index, name) in names.enumerated() {
             addPlayer(name, jersey: index + 1, in: app)
         }
-        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS %@", "Finley")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Finley")).firstMatch.waitForExistence(timeout: 5))
 
         // New game.
         app.tabBars.buttons["Games"].tap()
@@ -62,9 +69,9 @@ final class CoachesAssistantUITests: XCTestCase {
         app.staticTexts["vs Wildcats"].firstMatch.tap()
 
         // Starting lineup: first five players.
-        app.buttons["Set Starting Lineup"].tap()
+        button(startingWith: "Set Starting Lineup", in: app).tap()
         for name in names.prefix(5) {
-            app.buttons.containing(NSPredicate(format: "label CONTAINS %@", name)).firstMatch.tap()
+            app.buttons.matching(NSPredicate(format: "label CONTAINS %@", name)).firstMatch.tap()
         }
         app.navigationBars.buttons["Set Lineup"].tap()
         XCTAssertTrue(app.staticTexts["On Court"].waitForExistence(timeout: 5))
@@ -83,7 +90,11 @@ final class CoachesAssistantUITests: XCTestCase {
         // End the game.
         app.swipeUp()
         app.buttons["End Game"].firstMatch.tap()
-        app.sheets.buttons["End Game"].firstMatch.tap()
+        // The confirmation is a popover anchored to the button; its own
+        // "End Game" action is the second match once it appears.
+        let endButtons = app.buttons.matching(NSPredicate(format: "label == %@", "End Game"))
+        XCTAssertTrue(endButtons.element(boundBy: 1).waitForExistence(timeout: 5))
+        endButtons.element(boundBy: 1).tap()
         XCTAssertTrue(app.staticTexts["Final"].waitForExistence(timeout: 5))
     }
 

@@ -40,16 +40,22 @@ struct FixtureLineupView: View {
                 Section {
                     ForEach(sortedPlayers) { player in
                         let idString = player.playerID.uuidString
-                        HStack {
-                            Image(systemName: selectedIDStrings.contains(idString) ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(selectedIDStrings.contains(idString) ? sport.tint : .secondary)
-                            Text(player.displayName)
-                            Spacer()
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
+                        // A real button (not a tap gesture) so VoiceOver announces
+                        // the row as selectable and reports its selected state.
+                        Button {
                             toggleSelection(idString)
+                        } label: {
+                            HStack {
+                                Image(systemName: selectedIDStrings.contains(idString) ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(selectedIDStrings.contains(idString) ? sport.tint : .secondary)
+                                    .accessibilityHidden(true)
+                                Text(player.displayName)
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                            }
                         }
+                        .buttonStyle(.listRow)
+                        .accessibilityAddTraits(selectedIDStrings.contains(idString) ? .isSelected : [])
                     }
                 }
 
