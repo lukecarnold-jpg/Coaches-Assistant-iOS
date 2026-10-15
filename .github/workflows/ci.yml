@@ -32,10 +32,6 @@ jobs:
             # Launch-time measurement is too noisy on shared runners to be useful.
             skip-testing: "Coaches AssistantUITests/CoachesAssistantUITests/testLaunchPerformance"
 
-    defaults:
-      run:
-        working-directory: "Basketball Rotation"
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -93,5 +89,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.suite }}
-          path: "Basketball Rotation/TestResults-${{ matrix.suite }}.xcresult"
+          path: "TestResults-${{ matrix.suite }}.xcresult"
           if-no-files-found: ignore
