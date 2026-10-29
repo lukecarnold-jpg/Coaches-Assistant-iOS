@@ -44,6 +44,18 @@ final class CoachesAssistantUITests: XCTestCase {
     }
 
     @MainActor
+    private func hittableButton(labelled label: String, in app: XCUIApplication, maxSwipes: Int = 4) -> XCUIElement? {
+        let button = app.buttons[label].firstMatch
+        for _ in 0...maxSwipes {
+            if button.exists && button.isHittable {
+                return button
+            }
+            app.swipeUp()
+        }
+        return nil
+    }
+
+    @MainActor
     private func addPlayer(_ name: String, jersey: Int, in app: XCUIApplication) {
         app.buttons["Add player"].tap()
         let nameField = app.textFields["Name"]
@@ -105,8 +117,7 @@ final class CoachesAssistantUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Wildcats score 2"].exists)
 
         // End the game.
-        app.swipeUp()
-        let endGame = app.buttons["End Game"].firstMatch
+        let endGame = try XCTUnwrap(hittableButton(labelled: "End Game", in: app))
         let endGameFrame = endGame.frame
         endGame.tap()
         // The confirmation's own "End Game" action is presented as a popover on
