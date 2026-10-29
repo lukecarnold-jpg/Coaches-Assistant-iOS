@@ -71,8 +71,12 @@ jobs:
         run: |
           set -o pipefail
           SKIP_ARGS=()
+          PARALLEL_ARGS=()
           if [ -n "${{ matrix.skip-testing }}" ]; then
             SKIP_ARGS=(-skip-testing:"${{ matrix.skip-testing }}")
+          fi
+          if [ "${{ matrix.suite }}" = "ui" ]; then
+            PARALLEL_ARGS=(-parallel-testing-enabled NO)
           fi
           xcodebuild test \
             -project "Coaches Assistant.xcodeproj" \
@@ -80,6 +84,7 @@ jobs:
             -destination "id=${{ steps.simulator.outputs.udid }}" \
             -only-testing:"${{ matrix.only-testing }}" \
             "${SKIP_ARGS[@]}" \
+            "${PARALLEL_ARGS[@]}" \
             -resultBundlePath "$PWD/TestResults-${{ matrix.suite }}.xcresult" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
